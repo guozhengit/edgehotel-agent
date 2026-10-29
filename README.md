@@ -72,6 +72,8 @@ $env:JAVA_HOME='D:\jdk\jdk-17.0.12'
 | `hotel`（默认） | 不带参数 | 房态 / 价格 / 订单 + 投诉升级、话术生成（2 敏感） |
 | `restaurant` | `EH_TEMPLATE=restaurant` | 桌态 / 菜单价格 / 订单 / 会员脱敏 + 客诉升级、营销话术（2 敏感） |
 
+**投诉分类模型矩阵（实测 2026-10-30）**：gemma-4-E4B F1=0.98 / P95 6.2s（默认，质量优先）；Qwen2.5-0.5B-Instruct F1=0.87 / P95 0.2s（速度优先，迭代提示词含"服务请求不是投诉"负例边界）；Qwen3.5-9B 思考-only 不可用于分类（四机制无法关闭 reasoning）。演进项：两级分类（0.5B 初筛 → gemma 复核）。
+
 新行业模板 = 在自己的包里实现 `Tool`（`ToolResult.standard/empty/error` 公开工厂）+ 一个 `TemplateDescriptor`，**不改任何 Runtime 代码**。验证：`GET /api/agent/tools` 检视（2026-10-30 实测双模板切换零泄漏，hotel 5 工具 / restaurant 6 工具）。
 
 ## MCP 数据源模式
