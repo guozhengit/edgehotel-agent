@@ -22,8 +22,10 @@ agent:
   chat-timeout-seconds: ${EH_CHAT_TIMEOUT:120}
 
 complaint:
-  # 投诉识别模型（M1-2，短文本分类走 9B 快路径）
-  model: ${EH_COMPLAINT_MODEL:qwen/qwen3.5-9b}
+  # 投诉识别模型（M1-2 短文本分类）。2026-10-30 默认切 gemma-4-e4b：
+  # Qwen3.5-9B 实测为思考-only 模型（/no_think、thinking 参数、chat_template_kwargs 四机制均无法关闭），
+  # 本机同驻 embedding 时分类 101s+ 不可用；gemma 分类实测 10/10 正确、P95=6.2s（F1 大样本重验待做）。
+  model: ${EH_COMPLAINT_MODEL:google/gemma-4-e4b}
   base-url: ${EH_LLM_BASE_URL:http://localhost:1234/v1}
 
 app:
