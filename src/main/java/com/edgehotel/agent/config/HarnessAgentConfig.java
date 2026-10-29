@@ -7,6 +7,7 @@ import io.agentscope.harness.agent.HarnessAgent;
 import io.agentscope.harness.agent.memory.compaction.CompactionConfig;
 import io.agentscope.spring.boot.openai.OpenAIChatModelBuilderCustomizer;
 import java.nio.file.Paths;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -22,8 +23,8 @@ public class HarnessAgentConfig {
     /** ModelRegistry 注册名（供 HarnessAgent.model(...) 解析） */
     public static final String LM_STUDIO_MODEL = "edgehotel:lmstudio";
 
-    /** 工作区根（AGENTS.md / MEMORY.md / sessions 落在这里） */
-    private static final String WORKSPACE_ROOT = "D:/AI/edgehotel-agent/.agentscope/workspace";
+    /** 工作区根（AGENTS.md / MEMORY.md / sessions 落在这里）。相对路径：宿主机以工程根为 cwd，容器内为 /app。 */
+    private static final String WORKSPACE_ROOT = "application.yml: app.workspace（默认 .agentscope/workspace）";
 
     /**
      * 通过官方 customizer 钩子给 OpenAIChatModel 挂载 /no_think formatter
@@ -35,7 +36,8 @@ public class HarnessAgentConfig {
     }
 
     @Bean
-    public HarnessAgent edgeHotelAgent(OpenAIChatModel openAIChatModel) {
+    public HarnessAgent edgeHotelAgent(OpenAIChatModel openAIChatModel,
+            @Value("${app.workspace:.agentscope/workspace}") String workspaceRoot) {
         // 注册命名模型（重复 register 同名会覆盖，单例 Bean 只执行一次）
         ModelRegistry.register(LM_STUDIO_MODEL, openAIChatModel);
 
@@ -48,7 +50,7 @@ public class HarnessAgentConfig {
                         不要编造酒店不存在的信息；不确定时请用户咨询前台。
                         """)
                 .model(LM_STUDIO_MODEL)
-                .workspace(Paths.get(WORKSPACE_ROOT))
+                .workspace(Paths.get(workspaceRoot))
                 .compaction(CompactionConfig.builder()
                         .triggerMessages(30)
                         .keepMessages(10)

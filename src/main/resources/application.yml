@@ -36,6 +36,10 @@ app:
   preflight: ${EH_PREFLIGHT:warn}
   # 租户标记（M6-1）：落库审计字段（tickets/channel_messages），每商家一个部署实例
   tenant-id: ${EH_TENANT_ID:default}
+  # HarnessAgent 工作区（相对路径容器/宿主通用；Docker 卷可挂载持久化）
+  workspace: ${EH_WORKSPACE:.agentscope/workspace}
+  # 运行时守卫（每 5 分钟复检内存/引擎数/模型加载态，漂移告警）：on（默认）| off
+  runtime-guard: ${EH_RUNTIME_GUARD:on}
   # MCP 数据源模式：true 时读类工具桥接 edgehotel-mcp-server（EH_MCP_URL 指向 8601 /mcp），
   # 数据源（demo/外置JSON/aurora 真实PMS）由 MCP server 侧决定；写类工具仍走运行时（审批+落库）
   mcp:

@@ -25,6 +25,8 @@ RUN mvn -q -B -s settings.xml package -DskipTests
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /build/target/*.jar app.jar
+# HarnessAgent 工作区（相对路径，消除启动 WARN）
+RUN mkdir -p /app/.agentscope/workspace
 # SQLite 数据卷挂载点（approvals/silent_failures/memories/eval_cases 四表）
 VOLUME ["/app/data"]
 # 环境变量化配置（均带默认值，见 application.yml）
