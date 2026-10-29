@@ -24,7 +24,7 @@ if ($engines -ge 2) {
 
 # ---- 治理参数表（ITGG 规范 §3.1/§3.2） ----
 switch ($Model) {
-    "qwen3.5-9b"   { $id = "qwen/qwen3.5-9b"; $extra = @("--context-length", "8192", "--gpu", "max") }
+    "qwen3.5-9b"   { $id = "qwen/qwen3.5-9b"; $extra = @("--context-length", "8192", "--gpu", "0.85") }  # 0.85/0.75/max 实测均受 VLM vision 塔常驻限制（详见治理文档 §3.1）
     "embedding"    { $id = "text-embedding-qwen__qwen3-embedding-0.6b"; $extra = @("--gpu", "max") }
     "30b-a3b"      { $id = "qwen3-30b-a3b"; $extra = @("--context-length", "8192", "--gpu", "0.3") }
     "gemma"        { $id = "google/gemma-4-e4b"; $extra = @("--context-length", "8192", "--gpu", "max") }
@@ -37,7 +37,7 @@ $ErrorActionPreference = "Continue"
 if ($Model -eq "embedding") {
     & $Lms load $id --gpu max 2>&1 | Select-Object -Last 1
 } else {
-    & $Lms load $id --context-length 8192 --gpu $(if ($Model -eq "30b-a3b") { "0.3" } else { "max" }) --ttl $TtlSeconds --exact 2>&1 | Select-Object -Last 1
+    & $Lms load $id --context-length 8192 --gpu $(if ($Model -eq "30b-a3b") { "0.3" } elseif ($Model -eq "qwen3.5-9b") { "0.85" } else { "max" }) --ttl $TtlSeconds --exact 2>&1 | Select-Object -Last 1
 }
 if ($LASTEXITCODE -ne 0) { Write-Host "[load] FAIL" -ForegroundColor Red; exit 1 }
 Write-Host "[load] OK（TTL 到期自动卸载兜底）" -ForegroundColor Green
