@@ -1,0 +1,33 @@
+# EdgeHotel-Agent 一键起服务（M3-3，新商家接入 <1 天）
+# 用法：docker compose up -d
+# 前置：宿主机/独立容器运行 OpenAI 兼容 LLM 服务（本机 LM Studio 端口 1234）
+services:
+  edgehotel-agent:
+    build: .
+    image: edgehotel-agent:0.1
+    container_name: edgehotel-agent
+    ports:
+      - "8600:8600"          # 改端口：左侧改 86xx 段（如 8611:8600）
+    environment:
+      - EH_PORT=8600
+      - EH_LLM_BASE_URL=http://host.docker.internal:1234/v1   # 引用宿主 LM Studio
+      - EH_AGENT_MODEL=qwen3-30b-a3b
+      - EH_COMPLAINT_MODEL=qwen/qwen3.5-9b
+      - EH_EMB_MODEL=text-embedding-qwen__qwen3-embedding-0.6b
+      - EH_DB_PATH=data/edgehotel.db
+    volumes:
+      - edgehotel-data:/app/data        # 数据持久化（每商家独立卷 = 租户隔离）
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 可选：独立 LLM 服务容器（本机已有 LM Studio 时无需启用）
+  # llama-server:
+  #   image: ghcr.io/ggerganov/llama.cpp:server
+  #   ports: ["1234:8080"]
+  #   volumes: ["llm-models:/models"]
+  #   command: ["-m", "/models/qwen3-30b-a3b-q4_k_m.gguf", "--port", "8080"]
+
+volumes:
+  edgehotel-data:
+  # llm-models:

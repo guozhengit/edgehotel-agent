@@ -5,6 +5,7 @@ import com.edgehotel.agent.agent.verifier.SilentFailureLedger;
 import com.edgehotel.agent.agent.verifier.ToolVerifier;
 import com.edgehotel.agent.agent.verifier.VerifyVerdict;
 import com.edgehotel.agent.memory.MemoryStore;
+import com.edgehotel.agent.store.EvalCaseStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -34,12 +35,16 @@ public class AgentRunner {
     private final SilentFailureLedger ledger;
     private final ApprovalGate approvalGate;
     private final MemoryStore memoryStore;
+    private final EvalCaseStore evalCaseStore;
+    /** 推理限流（治理红线 §六.1：同一时刻仅 1 个推理请求，LM Studio 并发会叠加 KV cache 并可能 500）。 */
+    private final java.util.concurrent.Semaphore inferenceLock = new java.util.concurrent.Semaphore(1);
 
     public AgentRunner(ToolRegistry registry,
                        ToolVerifier verifier,
                        SilentFailureLedger ledger,
                        ApprovalGate approvalGate,
                        MemoryStore memoryStore,
+                       EvalCaseStore evalCaseStore,
                        @Value("${agent.model}") String model,
                        @Value("${agent.base-url}") String baseUrl,
                        @Value("${agent.max-tool-rounds:3}") int maxRounds) {
@@ -48,6 +53,7 @@ public class AgentRunner {
         this.ledger = ledger;
         this.approvalGate = approvalGate;
         this.memoryStore = memoryStore;
+        this.evalCaseStore = evalCaseStore;
         this.model = model;
         this.maxRounds = maxRounds;
         this.client = WebClient.builder()
@@ -115,6 +121,9 @@ public class AgentRunner {
                     VerifyVerdict verdict = verifier.verify(name, result, ctx);
                     if (verdict.isFailure()) {
                         ledger.record(ctx.sessionId(), name, verdict, verdict.reason());
+                        // M3-1 失败即资产：失败轨迹自动入回归用例集（hash 去重）
+                        evalCaseStore.record(ctx.sessionId(), name, argsJson, verdict.category(),
+                                verdict.verdict().name(), verdict.reason());
                         if (verdict.verdict() == VerifyVerdict.Verdict.SILENT_FAILURE) {
                             verifierWarnings.add(name + ":" + verdict.reason());
                         }
@@ -175,12 +184,21 @@ public class AgentRunner {
                 "messages", messages,
                 "tools", registry.toOpenAITools(),
                 "temperature", 0.3);
-        Map<String, Object> resp = client.post().uri("/chat/completions")
-                .bodyValue(body)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
-        return resp;
+        try {
+            inferenceLock.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("推理限流被中断", e);
+        }
+        try {
+            return client.post().uri("/chat/completions")
+                    .bodyValue(body)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+        } finally {
+            inferenceLock.release();
+        }
     }
 
     @SuppressWarnings("unchecked")

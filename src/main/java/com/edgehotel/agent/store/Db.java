@@ -71,9 +71,23 @@ public class Db {
                         source_step TEXT,
                         ts TEXT
                     )""");
+            st.execute("""
+                    CREATE TABLE IF NOT EXISTS eval_cases (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        trajectory_hash TEXT UNIQUE,
+                        session_id TEXT,
+                        tool_name TEXT,
+                        args_summary TEXT,
+                        category TEXT,
+                        verdict TEXT,
+                        recovery TEXT,
+                        hits INTEGER DEFAULT 1,
+                        ts TEXT
+                    )""");
             st.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_failures_category ON silent_failures(category)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope_type, scope_id)");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_eval_hash ON eval_cases(trajectory_hash)");
         }
     }
 
