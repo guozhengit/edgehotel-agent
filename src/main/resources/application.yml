@@ -45,6 +45,13 @@ channel:
   enabled: ${EH_CHANNEL_ENABLED:false}
   secret: ${EH_CHANNEL_SECRET:}
   echo: ${EH_CHANNEL_ECHO:false}
+  feishu:
+    # 飞书事件订阅回调 POST /api/channel/feishu/callback（加解密复用官方 FeishuCrypto）
+    enabled: ${EH_FEISHU_ENABLED:false}
+    encrypt-key: ${EH_FEISHU_ENCRYPT_KEY:}
+    verification-token: ${EH_FEISHU_VERIFICATION_TOKEN:}
+    app-id: ${EH_FEISHU_APP_ID:}        # 出站（IM API 回复）需要；缺省时回复状态=pending_credentials
+    app-secret: ${EH_FEISHU_APP_SECRET:}
   # SQLite 库路径（每商家独立库 = 租户隔离；Docker 挂载卷到 data/）
   db-path: ${EH_DB_PATH:data/edgehotel.db}
 

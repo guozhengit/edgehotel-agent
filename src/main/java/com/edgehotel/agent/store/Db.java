@@ -96,6 +96,17 @@ public class Db {
                         status TEXT,
                         ts TEXT
                     )""");
+            st.execute("""
+                    CREATE TABLE IF NOT EXISTS channel_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        channel TEXT,
+                        peer TEXT,
+                        direction TEXT,
+                        session_id TEXT,
+                        content TEXT,
+                        status TEXT,
+                        ts TEXT
+                    )""");
             st.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_failures_category ON silent_failures(category)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope_type, scope_id)");

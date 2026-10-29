@@ -12,6 +12,8 @@ import sys
 
 ARTIFACTS = [
     "agentscope-core",
+    "agentscope-extensions-channel-common",
+    "agentscope-extensions-channel-feishu",
     "agentscope-extensions-model-openai",
     "agentscope-harness",
     "agentscope-openai-spring-boot-starter",

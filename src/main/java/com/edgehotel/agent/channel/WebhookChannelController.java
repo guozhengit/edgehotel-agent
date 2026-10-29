@@ -3,6 +3,9 @@ package com.edgehotel.agent.agent.channel;
 import com.edgehotel.agent.agent.AgentRunner;
 import com.edgehotel.agent.agent.TemplateDescriptor;
 import com.edgehotel.agent.agent.Tool;
+import com.edgehotel.agent.store.ChannelMessageStore;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,16 +46,19 @@ public class WebhookChannelController {
 
     private final AgentRunner runner;
     private final TemplateDescriptor template;
+    private final ChannelMessageStore messageStore;
     private final boolean enabled;
     private final String secret;
     private final boolean echo;
 
     public WebhookChannelController(AgentRunner runner, TemplateDescriptor template,
+                                    ChannelMessageStore messageStore,
                                     @Value("${channel.enabled:false}") boolean enabled,
                                     @Value("${channel.secret:}") String secret,
                                     @Value("${channel.echo:false}") boolean echo) {
         this.runner = runner;
         this.template = template;
+        this.messageStore = messageStore;
         this.enabled = enabled;
         this.secret = secret;
         this.echo = echo;
@@ -90,10 +96,18 @@ public class WebhookChannelController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "签名校验失败"));
         }
 
-        // 解析载荷（手动轻解析：避免为两个字段引入绑定层差异）
-        String peer = extractJsonString(rawBody, "peer");
-        String text = extractJsonString(rawBody, "text");
-        String externalSessionId = extractJsonString(rawBody, "externalSessionId");
+        // 解析载荷（Jackson 读取，避免嵌套对象同名键取错值）
+        String peer;
+        String text;
+        String externalSessionId;
+        try {
+            JsonNode root = new ObjectMapper().readTree(rawBody);
+            peer = root.path("peer").asText(null);
+            text = root.path("text").asText(null);
+            externalSessionId = root.path("externalSessionId").asText(null);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "载荷非法 JSON"));
+        }
         if (peer == null || peer.isBlank() || text == null || text.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "peer 与 text 必填"));
         }
@@ -103,13 +117,17 @@ public class WebhookChannelController {
         String sessionId = "ch-webhook-" + peer
                 + (externalSessionId == null || externalSessionId.isBlank() ? "" : "-" + externalSessionId);
 
+        messageStore.record("webhook", peer, "inbound", sessionId, text, "received");
+
         // 回环测试模式：不调模型
         if (echo) {
+            String reply = "【渠道回环测试】已收到消息并完成会话映射（不调模型）：text=" + text;
+            messageStore.record("webhook", peer, "outbound", sessionId, reply, "echo");
             return ResponseEntity.ok(Map.of(
                     "mode", "echo",
                     "peer", peer,
                     "session_id", sessionId,
-                    "reply", "【渠道回环测试】已收到消息并完成会话映射（不调模型）：text=" + text));
+                    "reply", reply));
         }
 
         // 真实模式：与 /api/agent/ask 同编排链路
@@ -123,6 +141,7 @@ public class WebhookChannelController {
         user.put("content", text);
         messages.add(user);
         AgentRunner.AgentTurn turn = runner.run(messages, new Tool.ToolContext(userId, sessionId));
+        messageStore.record("webhook", peer, "outbound", sessionId, turn.finalAnswer(), "sent");
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("mode", "agent");
         out.put("peer", peer);
@@ -140,40 +159,4 @@ public class WebhookChannelController {
         return ResponseEntity.ok(out);
     }
 
-    /** 轻量 JSON 字符串字段提取（仅顶层、转义安全）；载荷应保持精简。 */
-    private static String extractJsonString(String json, String key) {
-        if (json == null) {
-            return null;
-        }
-        String needle = "\"" + key + "\"";
-        int k = json.indexOf(needle);
-        if (k < 0) {
-            return null;
-        }
-        int colon = json.indexOf(':', k + needle.length());
-        int open = json.indexOf('"', colon);
-        if (colon < 0 || open < 0) {
-            return null;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = open + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '\\' && i + 1 < json.length()) {
-                char n = json.charAt(++i);
-                sb.append(switch (n) {
-                    case 'n' -> '\n';
-                    case 't' -> '\t';
-                    case '"' -> '"';
-                    case '\\' -> '\\';
-                    default -> n;
-                });
-                continue;
-            }
-            if (c == '"') {
-                return sb.toString();
-            }
-            sb.append(c);
-        }
-        return null;
-    }
 }

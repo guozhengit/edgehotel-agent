@@ -37,6 +37,13 @@
             <version>${agentscope.version}</version>
         </dependency>
 
+        <!-- 官方飞书渠道扩展（M4）：复用其回调加解密（FeishuCrypto），薄接入本工程渠道层 -->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-channel-feishu</artifactId>
+            <version>${agentscope.version}</version>
+        </dependency>
+
         <!-- WebFlux：响应式 HTTP 入口 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
