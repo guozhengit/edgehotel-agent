@@ -1,0 +1,21 @@
+{
+  "_comment": "EdgeHotel MCP Server 示例数据（--pms demo --data <此文件> 加载；换真实商家数据直接改此文件，不动代码）",
+  "inventory": {
+    "2026-10-30": { "standard": 12, "deluxe": 8, "suite": 2 },
+    "2026-10-31": { "standard": 9, "deluxe": 5, "suite": 0 },
+    "2026-11-01": { "standard": 15, "deluxe": 10, "suite": 3 }
+  },
+  "prices": {
+    "standard": { "price": 599, "breakfast": 0 },
+    "deluxe": { "price": 899, "breakfast": 1 },
+    "suite": { "price": 1599, "breakfast": 1 }
+  },
+  "bookings": {
+    "B20261001": { "guest": "王先生", "roomType": "deluxe", "status": "已确认" },
+    "B20261002": { "guest": "李女士", "roomType": "suite", "status": "已入住" }
+  },
+  "members": {
+    "M-1001": { "level": "铂金", "preferences": "高层无烟房 / 早餐素食 / 忌花生" },
+    "M-1002": { "level": "金卡", "preferences": "安静朝向 / 行政房" }
+  }
+}

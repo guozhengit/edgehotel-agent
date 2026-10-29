@@ -61,6 +61,7 @@ public class McpServerMain {
         int port = 8601;
         String pmsMode = "demo";
         String pmsUrl = "http://localhost:8100";
+        String dataJson = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--http" -> {
@@ -79,6 +80,11 @@ public class McpServerMain {
                         pmsUrl = args[++i];
                     }
                 }
+                case "--data" -> {
+                    if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                        dataJson = args[++i];
+                    }
+                }
                 default -> {
                     // 忽略未知参数
                 }
@@ -90,8 +96,11 @@ public class McpServerMain {
             dataSource = new AuroraPmsClient(pmsUrl, mapper);
             System.err.println("[edgehotel-mcp] 数据源: aurora 真实 PMS @ " + pmsUrl);
         } else {
-            dataSource = new HotelData();
-            System.err.println("[edgehotel-mcp] 数据源: demo 示例数据（--pms aurora 切换真实 PMS）");
+            dataSource = dataJson != null
+                    ? new HotelData(java.nio.file.Path.of(dataJson), mapper)
+                    : new HotelData();
+            System.err.println("[edgehotel-mcp] 数据源: demo 示例数据"
+                    + (dataJson != null ? "（外置 JSON: " + dataJson + "）" : "（--pms aurora 切换真实 PMS）"));
         }
 
         if (httpMode) {
