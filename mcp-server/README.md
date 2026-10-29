@@ -90,7 +90,7 @@ Accept: application/json, text/event-stream
 | isError 语义 | 工具执行失败（`BAD_PARAM`/`PMS_UNAVAILABLE`）→ `CallToolResult.isError=true`；领域性如实答案（`UNKNOWN_DATE`/`UNKNOWN_TYPE`/`NOT_FOUND`/`SOLD_OUT`）保持普通结果 |
 | ToolAnnotations | 全部工具声明 `title/readOnlyHint/destructiveHint/idempotentHint/openWorldHint`（读工具 readOnly=true；写工具 readOnly=false 供客户端确认交互） |
 | structuredContent | 工具结果同时输出 text（key=value，兼容旧客户端）与 `structuredContent`（结构化 JSON） |
-| 协议版本 | HTTP 传输实测协商到 **2025-06-18**（stdio 传输 SDK 协商回落 2024-11-05，功能等价）；SDK 升 2.x 待排期 |
+| 协议版本 | SDK **2.1.0**（mcp-bom 一行升级，API 零改动）：stdio 与 HTTP 双传输实测均协商到 **2025-06-18** |
 
 ## 四、数据源
 
