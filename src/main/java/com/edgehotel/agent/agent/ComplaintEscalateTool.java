@@ -1,5 +1,6 @@
 package com.edgehotel.agent.agent;
 
+import com.edgehotel.agent.store.TicketStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,12 @@ import java.util.UUID;
 @Component
 @ConditionalOnProperty(name = "app.template", havingValue = "hotel", matchIfMissing = true)
 public class ComplaintEscalateTool implements Tool {
+
+    private final TicketStore tickets;
+
+    public ComplaintEscalateTool(TicketStore tickets) {
+        this.tickets = tickets;
+    }
 
     @Override
     public String name() {
@@ -44,9 +51,10 @@ public class ComplaintEscalateTool implements Tool {
         String guest = String.valueOf(args.getOrDefault("guest_name", "未知客人"));
         String issue = String.valueOf(args.getOrDefault("issue", ""));
         String severity = String.valueOf(args.getOrDefault("severity", "medium"));
-        String ticket = "TKT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        return ToolResult.standard("【示例】已生成工单 " + ticket + "（severity=" + severity
-                + "，客人 " + guest + "，问题：" + issue + "）。注：示例数据，真实值班通知在 M2 接入。");
+        String ticket = tickets.create("complaint", ctx.sessionId(), guest,
+                String.valueOf(args.getOrDefault("room_no", "-")), issue, "OPEN");
+        return ToolResult.standard("已生成工单 " + ticket + "（severity=" + severity
+                + "，客人 " + guest + "，问题：" + issue + "）。工单已留痕（OPEN），转人工跟进。");
     }
 
     @Override

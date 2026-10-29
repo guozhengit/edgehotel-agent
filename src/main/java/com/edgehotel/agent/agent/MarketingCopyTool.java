@@ -1,5 +1,6 @@
 package com.edgehotel.agent.agent;
 
+import com.edgehotel.agent.store.TicketStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -17,8 +18,10 @@ import java.util.Map;
 public class MarketingCopyTool implements Tool {
 
     private final Map<String, Object> schema;
+    private final TicketStore tickets;
 
-    public MarketingCopyTool() {
+    public MarketingCopyTool(TicketStore tickets) {
+        this.tickets = tickets;
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("type", "object");
         Map<String, Object> props = new LinkedHashMap<>();

@@ -61,6 +61,7 @@ $env:JAVA_HOME='D:\jdk\jdk-17.0.12'
 | `GET /api/eval/cases` | 回归用例集（失败轨迹自动入库） |
 | `POST /api/memory/add`、`GET /api/memory/recall` | 跨会话记忆写入 / 向量召回 |
 | `GET /api/agent/tools` | 当前模板工具集检视（模板切换的结构验证入口） |
+| `GET /api/tickets?kind=&status=` | 投诉工单/话术草稿查询（SQLite 落库留痕） |
 
 ## 行业模板（Runtime 复用性）
 
@@ -72,6 +73,22 @@ $env:JAVA_HOME='D:\jdk\jdk-17.0.12'
 | `restaurant` | `EH_TEMPLATE=restaurant` | 桌态 / 菜单价格 / 订单 / 会员脱敏 + 客诉升级、营销话术（2 敏感） |
 
 新行业模板 = 在自己的包里实现 `Tool`（`ToolResult.standard/empty/error` 公开工厂）+ 一个 `TemplateDescriptor`，**不改任何 Runtime 代码**。验证：`GET /api/agent/tools` 检视（2026-10-30 实测双模板切换零泄漏，hotel 5 工具 / restaurant 6 工具）。
+
+## MCP 数据源模式
+
+`EH_MCP_ENABLED=true` 时，读类工具桥接 [mcp-server](mcp-server/README.md)（`EH_MCP_URL` 默认 `http://localhost:8601/mcp`）：
+- name/description/inputSchema 以 MCP 侧为真源（数据源在 server 侧可切 demo / 外置 JSON / aurora 真实 PMS），主应用不再各存一份
+- 写类工具（投诉/话术）按排除名单保留在运行时（审批门 + SQLite tickets 落库）
+- 会话失效（server 重启）自动重初始化重试一次
+
+## Docker 部署
+
+```powershell
+docker build -t edgehotel-agent:0.1 .        # 自包含构建（agentscope SNAPSHOT 经 m2-vendor/ 离线解析）
+docker run -d -p 8600:8600 edgehotel-agent:0.1
+# 或: docker compose up -d
+```
+实测（2026-10-30，Docker 29.9.2）：镜像 525MB，容器内启动 4.3s，health/tools/SQLite 数据卷（edgehotel-data:/app/data）全部验证通过。
 
 ## 新商家接入（< 1 天）
 
