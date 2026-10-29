@@ -114,6 +114,21 @@ docker run -d -p 8600:8600 edgehotel-agent:0.1
 - 数据落 `data/edgehotel.db`（SQLite 四表）；`.gitignore` 排除，备份走 `backup-edgehotel-db.ps1`（自动日期目录、保留 14 份）。
 - 一键回归：`python scripts/eval-regression.py [--cases-only]` → 报告落 `data/regression-*.md`。
 
+## 运维工具箱（M5/M6）
+
+| 工具/端点 | 说明 |
+|---|---|
+| `GET /api/ops/overview` | 运行视图一屏聚合：模板/内存/模型加载态/渠道计数/工单存量 |
+| `scripts/build.ps1` | 构建防线：停应用（防 jar 文件锁）→ mvn → 产物校验（大小/Main-Class/mtime），exit code 显式 |
+| `scripts/load-model.ps1 -Model qwen3.5-9b` | 模型加载防线：可用内存/推理引擎红线前置拒绝 + 治理参数内置 |
+| `scripts/nightly-guard.ps1` | 每日守卫：构建+MCP 冒烟+资源体检 → logs/（schtasks 注册命令见脚本头注释） |
+| `scripts/sync-m2-vendor.py --verify` | vendor 完整性校验（构建前可跑） |
+| 冒烟脚本参数化 | `mcp-smoke-http.py [base-url]` / `mcp-smoke-aurora-live.py [base-url]` |
+| 频控 | 渠道 per-peer 每分钟限流 `EH_CHANNEL_RATE_LIMIT`（默认 30，超限 429） |
+| 租户标记 | `EH_TENANT_ID` 贯穿 tickets/channel_messages 审计字段 |
+| 备份恢复 | `backup-edgehotel-db.ps1` → 覆盖 data/edgehotel.db（2026-10-30 演练 PASS：标记行消失/数据完好） |
+| 升级流程 | 停应用 → build.ps1 → 起新版 → /api/health + ops/overview 确认（数据卷不受影响） |
+
 ## 资源治理红线（ITGG 本机）
 
 内存推理预算 ≤16GB、显存 ≤6.5GB、同驻推理模型 ≤2（日常 1）、单模型文件 ≤20GB；

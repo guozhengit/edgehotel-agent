@@ -52,6 +52,7 @@ public class FeishuChannelController {
     private final TemplateDescriptor template;
     private final ChannelMessageStore messages;
     private final ChannelStats stats;
+    private final ChannelRateLimiter rateLimiter;
     private final boolean enabled;
     private final boolean echo;
     private final FeishuCrypto crypto;
@@ -61,6 +62,7 @@ public class FeishuChannelController {
 
     public FeishuChannelController(AgentRunner runner, TemplateDescriptor template,
                                    ChannelMessageStore messages, ChannelStats stats,
+                                   ChannelRateLimiter rateLimiter,
                                    @Value("${channel.feishu.enabled:false}") boolean enabled,
                                    @Value("${channel.feishu.encrypt-key:}") String encryptKey,
                                    @Value("${channel.feishu.verification-token:}") String verificationToken,
@@ -71,6 +73,7 @@ public class FeishuChannelController {
         this.template = template;
         this.messages = messages;
         this.stats = stats;
+        this.rateLimiter = rateLimiter;
         this.enabled = enabled;
         this.echo = echo;
         this.verificationToken = verificationToken;
@@ -156,6 +159,11 @@ public class FeishuChannelController {
         }
 
         String peer = openId;
+        if (!rateLimiter.allow(peer)) {
+            stats.inc("feishu.drop_rate_limited");
+            log.warn("[feishu] peer={} 触发频控，消息丢弃（429 语义）", peer);
+            return ResponseEntity.status(429).body(Map.of("error", "请求过于频繁"));
+        }
         String sessionId = "ch-feishu-" + peer;
         messages.record("feishu", peer, "inbound", sessionId, text, "received");
         stats.inc("feishu.verified_inbound");

@@ -74,6 +74,11 @@ public class ApprovalGate {
         }
     }
 
+    /** 按 id 取审批记录（放行后执行工具用，e2e 发现的闭环缺口）。 */
+    public ApprovalRecord find(String id) {
+        return all().stream().filter(r -> r.id().equals(id)).findFirst().orElse(null);
+    }
+
     public List<ApprovalRecord> pending() {
         return query("status='pending'");
     }

@@ -107,10 +107,24 @@ public class Db {
                         status TEXT,
                         ts TEXT
                     )""");
+            // M6-1 租户标记：存量库幂等补列（SQLite 无 ADD COLUMN IF NOT EXISTS）
+            addColumnIfMissing(c, "tickets", "tenant");
+            addColumnIfMissing(c, "channel_messages", "tenant");
             st.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_failures_category ON silent_failures(category)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope_type, scope_id)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_eval_hash ON eval_cases(trajectory_hash)");
+        }
+    }
+
+    /** 幂等补列：列已存在则忽略（SQLITE_ERROR 视为已存在）。 */
+    private static void addColumnIfMissing(java.sql.Connection c, String table, String column) {
+        try (java.sql.Statement st = c.createStatement()) {
+            st.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " TEXT");
+        } catch (java.sql.SQLException e) {
+            if (!String.valueOf(e.getMessage()).contains("duplicate column")) {
+                throw new IllegalStateException("补列失败 " + table + "." + column + ": " + e.getMessage(), e);
+            }
         }
     }
 

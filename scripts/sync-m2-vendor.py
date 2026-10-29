@@ -23,6 +23,24 @@ VERSION = "2.0.4-SNAPSHOT"
 VENDOR_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "m2-vendor")
 
 
+def verify():
+    """校验 m2-vendor 完整性：7 构件 × (jar+pom+maven-metadata) 齐备。构建前可跑（复盘 P2）。"""
+    missing = []
+    for artifact in ARTIFACTS:
+        d = os.path.join(VENDOR_ROOT, "io", "agentscope", artifact, VERSION)
+        for suffix in (".jar", ".pom"):
+            hits = [f for f in os.listdir(d) if f.endswith(suffix)] if os.path.isdir(d) else []
+            if not hits:
+                missing.append(f"{artifact}/{suffix}")
+        if not os.path.isfile(os.path.join(d, "maven-metadata.xml")):
+            missing.append(f"{artifact}/maven-metadata.xml")
+    if missing:
+        print("vendor 缺失: " + "; ".join(missing))
+        print("修复: python scripts/sync-m2-vendor.py")
+        sys.exit(1)
+    print(f"vendor 完整 ✓（{len(ARTIFACTS)} 构件）")
+
+
 def main():
     repo = "D:/repository"
     if "--repo" in sys.argv:
@@ -48,4 +66,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--verify" in sys.argv:
+        verify()
+    else:
+        main()

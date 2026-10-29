@@ -1,33 +1,86 @@
-# EdgeHotel-Agent 一键起服务（M3-3，新商家接入 <1 天）
-# 用法：docker compose up -d
-# 前置：宿主机/独立容器运行 OpenAI 兼容 LLM 服务（本机 LM Studio 端口 1234）
+# EdgeHotel-Agent 生产化编排（M6-3，新商家接入 = 复制 .env.example → 填写 → docker compose up -d）
+# 用法：docker compose --env-file .env up -d
+# 可选渠道：docker compose --profile mcp --env-file .env up -d（含 MCP Server）
 services:
   edgehotel-agent:
     build: .
     image: edgehotel-agent:0.1
     container_name: edgehotel-agent
     ports:
-      - "8600:8600"          # 改端口：左侧改 86xx 段（如 8611:8600）
+      - "${EH_PORT:-8600}:8600"          # 改端口：左侧改 86xx 段（如 8611:8600）
     environment:
       - EH_PORT=8600
-      - EH_LLM_BASE_URL=http://host.docker.internal:1234/v1   # 引用宿主 LM Studio
-      - EH_AGENT_MODEL=qwen3-30b-a3b
-      - EH_COMPLAINT_MODEL=qwen/qwen3.5-9b
-      - EH_EMB_MODEL=text-embedding-qwen__qwen3-embedding-0.6b
+      - EH_LLM_BASE_URL=${EH_LLM_BASE_URL:-http://host.docker.internal:1234/v1}
+      - EH_AGENT_MODEL=${EH_AGENT_MODEL:-qwen3-30b-a3b}
+      - EH_COMPLAINT_MODEL=${EH_COMPLAINT_MODEL:-qwen/qwen3.5-9b}
+      - EH_EMB_MODEL=${EH_EMB_MODEL:-text-embedding-qwen__qwen3-embedding-0.6b}
       - EH_DB_PATH=data/edgehotel.db
+      - EH_MAX_ROUNDS=${EH_MAX_ROUNDS:-3}
+      - EH_CHAT_TIMEOUT=${EH_CHAT_TIMEOUT:-120}
+      - EH_PREFLIGHT=${EH_PREFLIGHT:-warn}
+      - EH_TEMPLATE=${EH_TEMPLATE:-hotel}
+      - EH_TENANT_ID=${EH_TENANT_ID:-default}
+      - EH_MCP_ENABLED=${EH_MCP_ENABLED:-false}
+      - EH_MCP_URL=${EH_MCP_URL:-http://host.docker.internal:8601/mcp}
+      - EH_CHANNEL_ENABLED=${EH_CHANNEL_ENABLED:-false}
+      - EH_CHANNEL_SECRET=${EH_CHANNEL_SECRET:-}
+      - EH_CHANNEL_ECHO=${EH_CHANNEL_ECHO:-false}
+      - EH_CHANNEL_RATE_LIMIT=${EH_CHANNEL_RATE_LIMIT:-30}
+      - EH_FEISHU_ENABLED=${EH_FEISHU_ENABLED:-false}
+      - EH_FEISHU_ENCRYPT_KEY=${EH_FEISHU_ENCRYPT_KEY:-}
+      - EH_FEISHU_VERIFICATION_TOKEN=${EH_FEISHU_VERIFICATION_TOKEN:-}
+      - EH_FEISHU_APP_ID=${EH_FEISHU_APP_ID:-}
+      - EH_FEISHU_APP_SECRET=${EH_FEISHU_APP_SECRET:-}
     volumes:
       - edgehotel-data:/app/data        # 数据持久化（每商家独立卷 = 租户隔离）
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # 健康检查：bash 内建 /dev/tcp 探活（镜像无 curl）
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8600 && echo -e 'GET /api/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q OK <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 1g                       # 应用为编排层，推理在宿主 LM Studio
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # 可选：独立 LLM 服务容器（本机已有 LM Studio 时无需启用）
-  # llama-server:
-  #   image: ghcr.io/ggerganov/llama.cpp:server
-  #   ports: ["1234:8080"]
-  #   volumes: ["llm-models:/models"]
-  #   command: ["-m", "/models/qwen3-30b-a3b-q4_k_m.gguf", "--port", "8080"]
+  # EdgeHotel MCP Server（可选，--profile mcp 启用）：HTTP 8601 + Bearer 门禁
+  edgehotel-mcp-server:
+    build: ./mcp-server
+    image: edgehotel-mcp-server:0.1
+    container_name: edgehotel-mcp-server
+    profiles: ["mcp"]
+    ports:
+      - "${EH_MCP_HTTP_PORT:-8601}:8601"
+    environment:
+      - EH_MCP_PMS=${EH_MCP_PMS:-demo}
+      - EH_MCP_PMS_URL=${EH_MCP_PMS_URL:-http://host.docker.internal}
+      - EH_MCP_PMS_TENANT=${EH_MCP_PMS_TENANT:-1}
+      - EH_MCP_AUTH_TOKEN=${EH_MCP_AUTH_TOKEN:-}
+      - EH_MCP_DATA=${EH_MCP_DATA:-}
+    volumes:
+      - mcp-data:/app/data
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8601 && echo -e 'GET /mcp HTTP/1.0\\r\\n\\r\\n' >&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   edgehotel-data:
-  # llm-models:
+  mcp-data:

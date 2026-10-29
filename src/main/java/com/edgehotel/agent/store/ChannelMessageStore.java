@@ -2,6 +2,7 @@ package com.edgehotel.agent.store;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -23,15 +24,17 @@ public class ChannelMessageStore {
     private static final Logger log = LoggerFactory.getLogger(ChannelMessageStore.class);
 
     private final Db db;
+    private final String tenant;
 
-    public ChannelMessageStore(Db db) {
+    public ChannelMessageStore(Db db, @Value("${app.tenant-id:default}") String tenant) {
         this.db = db;
+        this.tenant = tenant;
     }
 
     /** 记录一条渠道消息（direction=inbound|outbound）。 */
     public void record(String channel, String peer, String direction, String sessionId, String content, String status) {
         try (Connection c = db.open(); PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO channel_messages(channel, peer, direction, session_id, content, status, ts) VALUES (?,?,?,?,?,?,?)")) {
+                "INSERT INTO channel_messages(channel, peer, direction, session_id, content, status, ts, tenant) VALUES (?,?,?,?,?,?,?,?)")) {
             ps.setString(1, channel);
             ps.setString(2, peer);
             ps.setString(3, direction);
@@ -39,6 +42,7 @@ public class ChannelMessageStore {
             ps.setString(5, content);
             ps.setString(6, status);
             ps.setString(7, OffsetDateTime.now().toString());
+            ps.setString(8, tenant);
             ps.executeUpdate();
         } catch (Exception e) {
             // 审计落库失败不阻断主消息流，但必须留痕失败本身
@@ -49,7 +53,7 @@ public class ChannelMessageStore {
     /** 查询（channel/peer/direction 可空，倒序最近 100 条）。 */
     public List<Map<String, Object>> list(String channel, String peer, String direction) {
         StringBuilder sql = new StringBuilder(
-                "SELECT channel, peer, direction, session_id, content, status, ts FROM channel_messages WHERE 1=1");
+                "SELECT channel, peer, direction, session_id, content, status, ts, tenant FROM channel_messages WHERE 1=1");
         List<Object> params = new ArrayList<>();
         if (channel != null && !channel.isBlank()) {
             sql.append(" AND channel=?");
@@ -79,6 +83,7 @@ public class ChannelMessageStore {
                     m.put("content", rs.getString("content"));
                     m.put("status", rs.getString("status"));
                     m.put("ts", rs.getString("ts"));
+                    m.put("tenant", rs.getString("tenant"));
                     out.add(m);
                 }
             }

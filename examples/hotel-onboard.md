@@ -83,3 +83,12 @@ $env:JAVA_HOME='D:\jdk\jdk-17.0.12'
 | LM Studio 并发请求 → 500 | 应用侧 Semaphore(1) 串行化（框架已处理） |
 | SQLite 共享连接被关闭 | `Db.open()` 按需开关（框架已处理） |
 | 端口 80xx-84xx 已占用 | 新商家一律用 86xx 段 |
+
+
+## M5/M6 增补（2026-10-30）
+
+- **.env 接入**：复制 `.env.example` → `.env`，按商家填 `EH_TENANT_ID`（审计标记）与渠道/MCP 变量，`docker compose --env-file .env up -d`。
+- **试点建议**：`EH_PREFLIGHT=enforce`（模型未加载/内存红线直接拒绝启动）；非本机部署必配 `EH_MCP_AUTH_TOKEN` 与 `EH_CHANNEL_SECRET`。
+- **MCP Server 容器**：`docker compose --profile mcp --env-file .env up -d`（HTTP 8601，auth 冒烟 9/9）。
+- **升级流程**：`scripts/build.ps1`（自动停应用+产物校验）→ 重新 up → `GET /api/health` + `GET /api/ops/overview` 确认；数据卷持久不受影响。
+- **每日守卫**：按 `scripts/nightly-guard.ps1` 头注释注册计划任务（构建+冒烟+体检，日志落 logs/）。

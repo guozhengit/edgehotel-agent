@@ -48,12 +48,14 @@ public class WebhookChannelController {
     private final TemplateDescriptor template;
     private final ChannelMessageStore messageStore;
     private final ChannelStats stats;
+    private final ChannelRateLimiter rateLimiter;
     private final boolean enabled;
     private final String secret;
     private final boolean echo;
 
     public WebhookChannelController(AgentRunner runner, TemplateDescriptor template,
                                     ChannelMessageStore messageStore, ChannelStats stats,
+                                    ChannelRateLimiter rateLimiter,
                                     @Value("${channel.enabled:false}") boolean enabled,
                                     @Value("${channel.secret:}") String secret,
                                     @Value("${channel.echo:false}") boolean echo) {
@@ -61,6 +63,7 @@ public class WebhookChannelController {
         this.template = template;
         this.messageStore = messageStore;
         this.stats = stats;
+        this.rateLimiter = rateLimiter;
         this.enabled = enabled;
         this.secret = secret;
         this.echo = echo;
@@ -117,11 +120,12 @@ public class WebhookChannelController {
         }
         if (peer == null || peer.isBlank() || text == null || text.isBlank()) {
             stats.inc("webhook.drop_missing_fields");
-        }
-        if (peer == null || peer.isBlank() || text == null || text.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "peer 与 text 必填"));
         }
-
+        if (!rateLimiter.allow(peer)) {
+            stats.inc("webhook.drop_rate_limited");
+            return ResponseEntity.status(429).body(Map.of("error", "请求过于频繁，请稍后再试"));
+        }
         // 会话映射：确定性（跨轮次记忆/审批留痕连续）；externalSessionId 细分同用户并发会话
         String userId = "ch:webhook:" + peer;
         String sessionId = "ch-webhook-" + peer

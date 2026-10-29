@@ -1,5 +1,6 @@
 package com.edgehotel.agent.store;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -14,14 +15,17 @@ import java.util.Map;
 /**
  * 工单/话术草稿持久化（M2 遗留真实化）：投诉升级工单与营销话术草稿落 SQLite tickets 表。
  * 投诉=OPEN 留痕待人工跟进；话术=DRAFT 待审批发送。aurora 侧暂无工单 API，故本地落库。
+ * M6-1：每行带租户标记（EH_TENANT_ID），多实例部署可按租户审计。
  */
 @Component
 public class TicketStore {
 
     private final Db db;
+    private final String tenant;
 
-    public TicketStore(Db db) {
+    public TicketStore(Db db, @Value("${app.tenant-id:default}") String tenant) {
         this.db = db;
+        this.tenant = tenant;
     }
 
     /** 新建工单/草稿，返回 ref（TKT-/DRAFT- 前缀）。 */
@@ -30,7 +34,7 @@ public class TicketStore {
                 + Long.toHexString(System.currentTimeMillis()).toUpperCase() + "-"
                 + String.valueOf(1000 + (System.nanoTime() % 9000));
         try (Connection c = db.open(); PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO tickets(kind, ref, session_id, guest, location, content, status, ts) VALUES (?,?,?,?,?,?,?,?)")) {
+                "INSERT INTO tickets(kind, ref, session_id, guest, location, content, status, ts, tenant) VALUES (?,?,?,?,?,?,?,?,?)")) {
             ps.setString(1, kind);
             ps.setString(2, ref);
             ps.setString(3, sessionId);
@@ -39,6 +43,7 @@ public class TicketStore {
             ps.setString(6, content);
             ps.setString(7, status);
             ps.setString(8, OffsetDateTime.now().toString());
+            ps.setString(9, tenant);
             ps.executeUpdate();
         } catch (Exception e) {
             throw new IllegalStateException("工单落库失败: " + e.getMessage(), e);
@@ -49,7 +54,7 @@ public class TicketStore {
     /** 查询（kind/status 可空表示不过滤，默认倒序最近 50 条）。 */
     public List<Map<String, Object>> list(String kind, String status) {
         StringBuilder sql = new StringBuilder(
-                "SELECT kind, ref, session_id, guest, location, content, status, ts FROM tickets WHERE 1=1");
+                "SELECT kind, ref, session_id, guest, location, content, status, ts, tenant FROM tickets WHERE 1=1");
         List<Object> params = new ArrayList<>();
         if (kind != null && !kind.isBlank()) {
             sql.append(" AND kind=?");
@@ -75,6 +80,7 @@ public class TicketStore {
                     m.put("content", rs.getString("content"));
                     m.put("status", rs.getString("status"));
                     m.put("ts", rs.getString("ts"));
+                    m.put("tenant", rs.getString("tenant"));
                     out.add(m);
                 }
             }

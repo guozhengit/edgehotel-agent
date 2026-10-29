@@ -37,9 +37,15 @@ def main():
     try:
         ec = get("/api/eval/cases")
         cases = ec.get("cases", [])
+        # API 返回驼峰键（toolName/argsSummary），兼容蛇形
+        def k(c, name):
+            if "_" in name:
+                head, tail = name.split("_", 1)
+                return c.get(name, c.get(head + tail[0].upper() + tail[1:]))
+            return c.get(name)
         buf.write(f"回归集（eval_cases）: {ec.get('total', 0)} 条\n")
         for c in cases[:5]:
-            buf.write(f"  - [{c['category']}] {c['tool_name']} x{c['hits']} | {c['args_summary'][:36]}\n")
+            buf.write(f"  - [{k(c, 'category')}] {k(c, 'tool_name')} x{k(c, 'hits')} | {str(k(c, 'args_summary'))[:36]}\n")
         if len(cases) > 5:
             buf.write(f"  ... 其余 {len(cases)-5} 条\n")
     except Exception as e:

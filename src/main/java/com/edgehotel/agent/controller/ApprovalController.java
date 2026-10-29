@@ -1,8 +1,11 @@
 package com.edgehotel.agent.controller;
 
+import com.edgehotel.agent.agent.Tool;
+import com.edgehotel.agent.agent.ToolRegistry;
 import com.edgehotel.agent.agent.approval.ApprovalGate;
 import com.edgehotel.agent.agent.approval.ApprovalRecord;
 import com.edgehotel.agent.agent.verifier.SilentFailureLedger;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,10 +30,13 @@ public class ApprovalController {
 
     private final ApprovalGate gate;
     private final SilentFailureLedger ledger;
+    private final ToolRegistry registry;
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public ApprovalController(ApprovalGate gate, SilentFailureLedger ledger) {
+    public ApprovalController(ApprovalGate gate, SilentFailureLedger ledger, ToolRegistry registry) {
         this.gate = gate;
         this.ledger = ledger;
+        this.registry = registry;
     }
 
     @GetMapping("/approval/pending")
@@ -44,10 +50,36 @@ public class ApprovalController {
     }
 
     @PostMapping("/approval/{id}/grant")
-    public Map<String, Object> grant(@PathVariable String id, @RequestBody Map<String, String> body) {
-        String operator = body.getOrDefault("operator", "console-operator");
+    public Map<String, Object> grant(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        String operator = String.valueOf(body.getOrDefault("operator", "console-operator"));
         boolean ok = gate.grant(id, operator);
-        return Map.of("ok", ok, "approval_id", id, "status", ok ? "granted" : "failed（不存在或已决）");
+        if (!ok) {
+            return Map.of("ok", false, "approval_id", id, "status", "failed（不存在或已决）");
+        }
+        // 放行即执行（e2e 发现的闭环缺口）：此前 grant 仅翻转状态，写工具（投诉/话术）从未真正落地。
+        ApprovalRecord rec = gate.find(id);
+        Map<String, Object> out = new java.util.LinkedHashMap<>(Map.of(
+                "ok", true, "approval_id", id, "status", "granted", "operator", operator));
+        if (rec != null) {
+            var toolOpt = registry.find(rec.toolName());
+            if (toolOpt.isPresent()) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> args = mapper.readValue(rec.argsSummary(), Map.class);
+                    Tool.ToolResult r = toolOpt.get().run(args,
+                            new Tool.ToolContext("approval-exec", rec.sessionId() == null ? id : rec.sessionId()));
+                    out.put("execution", Map.of(
+                            "tool", rec.toolName(),
+                            "ok", r.ok(),
+                            "output", String.valueOf(r.output() == null ? r.error() : r.output())));
+                } catch (Exception e) {
+                    out.put("execution", Map.of("tool", rec.toolName(), "ok", false, "error", String.valueOf(e.getMessage())));
+                }
+            } else {
+                out.put("execution", Map.of("tool", rec.toolName(), "ok", false, "error", "工具不存在（可能模板已切换）"));
+            }
+        }
+        return out;
     }
 
     @PostMapping("/approval/{id}/deny")

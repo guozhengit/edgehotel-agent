@@ -4,7 +4,8 @@ import json
 import sys
 import urllib.request
 
-BASE = "http://localhost:8601/mcp"
+import sys as _sys
+BASE = _sys.argv[1] if len(_sys.argv) > 1 else "http://localhost:8601/mcp"
 HDRS = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
 
 def call(obj, session=None):

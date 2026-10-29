@@ -32,6 +32,8 @@ app:
   template: ${EH_TEMPLATE:hotel}
   # 启动前置检查（治理 §八）：off | warn（默认）| enforce（内存红线超限拒绝启动）
   preflight: ${EH_PREFLIGHT:warn}
+  # 租户标记（M6-1）：落库审计字段（tickets/channel_messages），每商家一个部署实例
+  tenant-id: ${EH_TENANT_ID:default}
   # MCP 数据源模式：true 时读类工具桥接 edgehotel-mcp-server（EH_MCP_URL 指向 8601 /mcp），
   # 数据源（demo/外置JSON/aurora 真实PMS）由 MCP server 侧决定；写类工具仍走运行时（审批+落库）
   mcp:
@@ -45,6 +47,8 @@ channel:
   enabled: ${EH_CHANNEL_ENABLED:false}
   secret: ${EH_CHANNEL_SECRET:}
   echo: ${EH_CHANNEL_ECHO:false}
+  # 频控（M6-2）：per-peer 每分钟消息上限（防滥用）；0=关闭
+  rate-limit-per-minute: ${EH_CHANNEL_RATE_LIMIT:30}
   feishu:
     # 飞书事件订阅回调 POST /api/channel/feishu/callback（加解密复用官方 FeishuCrypto）
     enabled: ${EH_FEISHU_ENABLED:false}
