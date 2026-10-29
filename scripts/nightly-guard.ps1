@@ -44,9 +44,9 @@ if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] 数据库备份 FAIL" -F
 
 # 4.5) 仓库备份（git bundle 全量自包含，可克隆恢复；保留 14 份）
 New-Item -ItemType Directory -Force -Path (Join-Path $root "backups") | Out-Null
-$bundle = Join-Path $root ("backupsepo-" + (Get-Date -Format "yyyyMMdd") + ".bundle")
-git -C $root bundle create $bundle --all
-if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] 仓库备份 FAIL" -ForegroundColor Red }
+$bundle = Join-Path $root ("backups\repo-" + (Get-Date -Format "yyyyMMdd") + ".bundle")
+& "C:\Program Files\Git\cmd\git.exe" -C $root bundle create $bundle --all *> $null
+if (-not (Test-Path $bundle)) { $fail++; Write-Host "[guard] 仓库备份 FAIL" -ForegroundColor Red }
 Get-ChildItem (Join-Path $root "backups") -Filter "repo-*.bundle" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 14 | Remove-Item -Force
 
 # 5) 资源体检
