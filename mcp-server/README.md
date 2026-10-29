@@ -18,9 +18,14 @@ $env:JAVA_HOME = "D:\jdk\jdk-17.0.12"
 | 模式 | 命令 | 适用场景 |
 |---|---|---|
 | stdio（默认） | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar [--pms demo\|aurora]` | 标准 MCP 客户端（Claude Desktop / Agent Runtime）拉起进程 |
-| Streamable HTTP | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http [端口] [--pms demo\|aurora] [--pms-url <base>]` | 跨进程/远程调用；默认端口 **8601**，端点 `http://localhost:8601/mcp` |
+| Streamable HTTP | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http [端口] [--pms demo\|aurora] [--pms-url <base>] [--auth-token <token>]` | 跨进程/远程调用；默认端口 **8601**，端点 `http://localhost:8601/mcp` |
 
 > Windows 下必须带 `-Dfile.encoding=UTF-8`，否则 stdin/stdout 中文乱码（JDK 默认系统代码页）。
+
+### HTTP 鉴权（--auth-token）
+
+- 配置 `--auth-token <token>` 后，`/mcp` 全部请求（POST JSON-RPC + GET SSE）要求 `Authorization: Bearer <token>`，否则 **401**；未配置则无鉴权（仅建议本机回环使用，启动时 stderr 告警）。
+- 冒烟：`python scripts/mcp-smoke-auth.py [port] [token]`（401/401/200 + 握手 + 会话 + 调用 + 协议特性检查，9 项）。
 
 ### 数据源（MCP Bridge）
 
@@ -77,6 +82,16 @@ Accept: application/json, text/event-stream
 
 **敏感写工具由调用方（Agent Runtime / 审批门）拦截**：本 Server 只提供工具语义与执行，审批语义保留在运行时层（与主工程 M1/M2 的 Approval Gate 一致）。
 
+### 主流范式对齐（2026-10-30）
+
+| 范式项 | 实现 |
+|---|---|
+| inputSchema | 按数据源模式声明**完整 properties/required/enum**（demo：date/room_type/order_id/member_id；aurora：skuId/order_no/member_no），启动即定型，无运行期参数别名兜底 |
+| isError 语义 | 工具执行失败（`BAD_PARAM`/`PMS_UNAVAILABLE`）→ `CallToolResult.isError=true`；领域性如实答案（`UNKNOWN_DATE`/`UNKNOWN_TYPE`/`NOT_FOUND`/`SOLD_OUT`）保持普通结果 |
+| ToolAnnotations | 全部工具声明 `title/readOnlyHint/destructiveHint/idempotentHint/openWorldHint`（读工具 readOnly=true；写工具 readOnly=false 供客户端确认交互） |
+| structuredContent | 工具结果同时输出 text（key=value，兼容旧客户端）与 `structuredContent`（结构化 JSON） |
+| 协议版本 | HTTP 传输实测协商到 **2025-06-18**（stdio 传输 SDK 协商回落 2024-11-05，功能等价）；SDK 升 2.x 待排期 |
+
 ## 四、数据源
 
 当前 `HotelData.java` 为**商家示例数据**（房态覆盖 2026-10-30 ~ 11-01，订单 B20261001/B20261002，会员 M-1001/M-1002）。
@@ -103,6 +118,13 @@ aurora 真实 PMS 联调冒烟（aurora 服务在线时跑；离线时可先跑�
 python scripts\mcp-smoke-aurora-live.py
 ```
 
+鉴权冒烟（先启动 `--http 8602 --auth-token <token>`，再跑）：
+
+```powershell
+java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http 8602 --pms demo --auth-token test-token-123
+python scripts\mcp-smoke-auth.py 8602 test-token-123
+```
+
 实测记录（2026-10-29）：
 - **stdio demo 9/9 PASS** —— 握手、6 工具枚举、房态/未知日期防幻觉/价格/订单/会员脱敏/投诉工单/话术草稿全部通过。
 - **HTTP demo 8/8 PASS** —— initialize（Mcp-Session-Id 会话）+ tools/list + 6 工具调用全部通过。
@@ -111,6 +133,11 @@ python scripts\mcp-smoke-aurora-live.py
 - **aurora 真实 PMS 联调 8/8 PASS** —— 真实数据全通：库存 sku1=20 / 价格 sku1 Superior King Room 1299 / 订单 ORD202610031157216C19C825（COMPLETED）脱敏无明文手机 / 会员 M100001（Demo Guest）服务端掩码视图 / 不存在会员如实 NOT_FOUND。
 - 已修复：`booking` 结果 Map 重复 key；价格早餐字段恒 false；启动日志曾污染 stdio stdout（改走 stderr）；直连缺租户头 500（加 `X-Merchant-Id`）；member 空对象返回 null 编造（改 NOT_FOUND 如实降级）。
 - 遗留：会员端点返回服务端脱敏视图（无明文）与 C 端"只能查自己"约束由 aurora 侧实现，MCP 侧仅透出掩码字段。
+
+范式对齐实测记录（2026-10-30）：
+- **stdio demo 9/9 PASS**（schema/isError/annotations 改造后无回归）+ **HTTP demo 8/8 PASS** + **aurora 在线 8/8 PASS**。
+- **鉴权冒烟 9/9 PASS** —— 无 token/错 token 均 401，对 token 全链路 200（握手/会话/tools/list/tools/call）。
+- **协议协商 2025-06-18**（HTTP 传输实测）；`tools/list` 返回完整 `inputSchema.required` 与 `annotations`；`tools/call` 结果含 `structuredContent`；BAD_PARAM 实测 `isError=true`。
 
 ## 六、治理对齐（ITGG 红线）
 
