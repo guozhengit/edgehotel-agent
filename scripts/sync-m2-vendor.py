@@ -15,6 +15,7 @@ ARTIFACTS = [
     "agentscope-extensions-channel-common",
     "agentscope-extensions-channel-feishu",
     "agentscope-extensions-channel-wecom",
+    "agentscope-extensions-channel-dingtalk",
     "agentscope-extensions-model-openai",
     "agentscope-harness",
     "agentscope-openai-spring-boot-starter",

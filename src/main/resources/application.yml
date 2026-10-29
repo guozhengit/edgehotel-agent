@@ -49,6 +49,11 @@ channel:
   echo: ${EH_CHANNEL_ECHO:false}
   # 频控（M6-2）：per-peer 每分钟消息上限（防滥用）；0=关闭
   rate-limit-per-minute: ${EH_CHANNEL_RATE_LIMIT:30}
+  dingtalk:
+    # 钉钉机器人回调 POST /api/channel/dingtalk/callback（签名复用官方 DingTalkCallbackCrypto；恒 200 语义）
+    enabled: ${EH_DINGTALK_ENABLED:false}
+    app-secret: ${EH_DINGTALK_APP_SECRET:}   # HMAC-SHA256 签名密钥
+    aes-key: ${EH_DINGTALK_AES_KEY:}         # 可选：加密信封解密
   wecom:
     # 企业微信回调 POST|GET /api/channel/wecom/callback（加解密复用官方 WeComCrypto，XML 信封）
     enabled: ${EH_WECOM_ENABLED:false}

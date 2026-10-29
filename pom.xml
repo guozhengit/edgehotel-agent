@@ -51,6 +51,13 @@
             <version>${agentscope.version}</version>
         </dependency>
 
+        <!-- 官方钉钉渠道扩展（M4）：复用其签名校验/解密（DingTalkCallbackCrypto），薄接入本工程渠道层 -->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-channel-dingtalk</artifactId>
+            <version>${agentscope.version}</version>
+        </dependency>
+
         <!-- WebFlux：响应式 HTTP 入口 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -96,7 +96,9 @@ $env:EH_CHANNEL_ENABLED='true'; $env:EH_CHANNEL_ECHO='true'; $env:EH_CHANNEL_SEC
 
 **企业微信适配器** `POST|GET /api/channel/wecom/callback`（M4 收尾）：复用官方 `WeComCrypto`（SHA-1 排序签名 + AES-CBC，EncodingAESKey 43 字符）——URL 验证（回解密明文）/ XML 信封解析（MsgType=text + FromUserName=peer）/ MsgId 幂等去重 / 消息落库审计 / echo 回环。离线自测：`java scripts/GenWeComFixture.java <token> <aesKey43> <receiveId> '<XML>'`，6 场景实测全过（URL 验证/消息/错签名 401/幂等/审计/计数器）。出站经企微 IM API 需 `EH_WECOM_CORP_ID/SECRET`（缺省 pending_credentials）。
 
-钉钉：官方 `agentscope-extensions-channel-dingtalk` 同仓库就位，接入模式同飞书/企微（后续增量）。
+**钉钉适配器** `POST /api/channel/dingtalk/callback`（M4 收尾）：复用官方 `DingTalkCallbackCrypto`（HMAC-SHA256 时间戳签名 + 可选 AES 信封）——peer 规则同官方（单聊 senderStaffId / 群聊 conversationId）、恒 200 语义（仅验签失败 401）、频控/审计/计数器接线。**出站走载荷内 sessionWebhook（平台签发地址）——三渠道中唯一零凭据开箱闭环**。离线自测：`java scripts/GenDingTalkFixture.java <appSecret>` 生成签名头，4 场景实测全过（单聊/群聊/非文本恒200/错签名 401）。
+
+**渠道矩阵（4/4 全通）**：通用 Webhook / 飞书 / 企业微信 / 钉钉——验签、解密、事件映射、频控、审计、计数器统一模式，出站均为"配置即通、缺省 pending_credentials"（钉钉 sessionWebhook 零凭据直接闭环）。
 
 ## Docker 部署
 
