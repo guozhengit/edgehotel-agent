@@ -32,8 +32,8 @@ VOLUME ["/app/data"]
 # 环境变量化配置（均带默认值，见 application.yml）
 ENV EH_PORT=8600 \
     EH_LLM_BASE_URL=http://host.docker.internal:1234/v1 \
-    EH_AGENT_MODEL=qwen3-30b-a3b \
-    EH_COMPLAINT_MODEL=qwen/qwen3.5-9b \
+    EH_AGENT_MODEL=google/gemma-4-e4b \
+    EH_COMPLAINT_MODEL=google/gemma-4-e4b \
     EH_EMB_MODEL=text-embedding-qwen__qwen3-embedding-0.6b \
     EH_DB_PATH=data/edgehotel.db
 EXPOSE 8600

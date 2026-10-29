@@ -14,8 +14,9 @@ rag:
     base-url: ${EH_LLM_BASE_URL:http://localhost:1234/v1}
 
 agent:
-  # 工具编排模型（M1-1 function calling）
-  model: ${EH_AGENT_MODEL:qwen3-30b-a3b}
+  # 工具编排模型（function calling）。2026-10-30 默认切 gemma-4-E4B：
+  # 本机实测常驻可用（e2e 28 轮全过）；30B 骨干（17.35GB）为临时加载档，经 EH_AGENT_MODEL 指定
+  model: ${EH_AGENT_MODEL:google/gemma-4-e4b}
   base-url: ${EH_LLM_BASE_URL:http://localhost:1234/v1}
   max-tool-rounds: ${EH_MAX_ROUNDS:3}
   # 单轮推理超时（秒）：超时释放推理信号量，不再饿死后续请求（治理：LM Studio 慢/挂起防护）
@@ -85,8 +86,8 @@ agentscope:
     enabled: true
     # LM Studio 不校验 API Key，占位即可
     api-key: "lm-studio"
-    # LM Studio 已装模型（骨干）；快路径可切换 qwen/qwen3.5-9b
-    model-name: ${EH_AGENT_MODEL:qwen3-30b-a3b}
+    # 与 agent.model 同源；HarnessAgent 路径（/api/chat）
+    model-name: ${EH_AGENT_MODEL:google/gemma-4-e4b}
     # LM Studio OpenAI 兼容端点
     base-url: ${EH_LLM_BASE_URL:http://localhost:1234/v1}
     stream: true
