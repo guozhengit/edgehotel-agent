@@ -51,6 +51,7 @@ public class FeishuChannelController {
     private final AgentRunner runner;
     private final TemplateDescriptor template;
     private final ChannelMessageStore messages;
+    private final ChannelStats stats;
     private final boolean enabled;
     private final boolean echo;
     private final FeishuCrypto crypto;
@@ -59,7 +60,7 @@ public class FeishuChannelController {
     private final String appSecret;
 
     public FeishuChannelController(AgentRunner runner, TemplateDescriptor template,
-                                   ChannelMessageStore messages,
+                                   ChannelMessageStore messages, ChannelStats stats,
                                    @Value("${channel.feishu.enabled:false}") boolean enabled,
                                    @Value("${channel.feishu.encrypt-key:}") String encryptKey,
                                    @Value("${channel.feishu.verification-token:}") String verificationToken,
@@ -69,6 +70,7 @@ public class FeishuChannelController {
         this.runner = runner;
         this.template = template;
         this.messages = messages;
+        this.stats = stats;
         this.enabled = enabled;
         this.echo = echo;
         this.verificationToken = verificationToken;
@@ -88,7 +90,9 @@ public class FeishuChannelController {
         if (!enabled || crypto == null) {
             return ResponseEntity.status(404).build();
         }
+        stats.inc("feishu.received");
         if (!crypto.verifySignature(signature, timestamp, nonce, rawBody)) {
+            stats.inc("feishu.drop_bad_signature");
             return ResponseEntity.status(401).body(Map.of("error", "签名校验失败"));
         }
         JsonNode root;
@@ -96,10 +100,12 @@ public class FeishuChannelController {
             JsonNode envelope = JSON.readTree(rawBody);
             String encrypt = envelope.path("encrypt").asText(null);
             if (encrypt == null || encrypt.isBlank()) {
+                stats.inc("feishu.drop_missing_encrypt");
                 return ResponseEntity.badRequest().body(Map.of("error", "缺少 encrypt 字段"));
             }
             root = JSON.readTree(crypto.decrypt(encrypt));
         } catch (Exception e) {
+            stats.inc("feishu.drop_decrypt_failed");
             return ResponseEntity.status(400).body(Map.of("error", "解密/解析失败: " + e.getMessage()));
         }
 
@@ -109,6 +115,7 @@ public class FeishuChannelController {
             if (challenge == null || challenge.isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "url_verification 缺 challenge"));
             }
+            stats.inc("feishu.url_verification");
             log.info("[feishu] URL 验证通过，challenge 已回");
             return ResponseEntity.ok(Map.of("challenge", challenge));
         }
@@ -117,6 +124,7 @@ public class FeishuChannelController {
         String token = root.path("header").path("token").asText(root.path("token").asText(null));
         if (verificationToken != null && !verificationToken.isBlank()
                 && !WebhookSignature.safeEquals(verificationToken, token)) {
+            stats.inc("feishu.drop_token_mismatch");
             return ResponseEntity.status(401).body(Map.of("error", "verification token 不匹配"));
         }
 
@@ -135,20 +143,27 @@ public class FeishuChannelController {
             text = null; // content 非 JSON：视为非文本消息，不处理
         }
         if (!"im.message.receive_v1".equals(root.path("header").path("event_type").asText(null))) {
-            return ResponseEntity.ok(Map.of("code", 0)); // 非消息事件：确认收到即可
+            stats.inc("feishu.drop_non_message_event"); // 静默丢弃必须有声音（复盘 F10）
+            log.info("[feishu] 非消息事件，确认收到不处理");
+            return ResponseEntity.ok(Map.of("code", 0));
         }
         if (openId == null || openId.isBlank() || text == null || text.isBlank()
                 || !"user".equals(senderType)) {
-            return ResponseEntity.ok(Map.of("code", 0)); // 非文本/非用户消息：不处理
+            stats.inc("feishu.drop_non_text_or_bot"); // 静默丢弃必须有声音（复盘 F10）
+            log.info("[feishu] 丢弃非文本/非用户消息: openId={}, senderType={}, hasText={}",
+                    openId, senderType, text != null && !text.isBlank());
+            return ResponseEntity.ok(Map.of("code", 0));
         }
 
         String peer = openId;
         String sessionId = "ch-feishu-" + peer;
         messages.record("feishu", peer, "inbound", sessionId, text, "received");
+        stats.inc("feishu.verified_inbound");
 
         if (echo) {
             String reply = "【渠道回环测试·飞书】已收到消息并完成会话映射（不调模型）：text=" + text;
             messages.record("feishu", peer, "outbound", sessionId, reply, "echo");
+            stats.inc("feishu.echo_reply");
             log.info("[feishu] echo 回复 peer={}: {}", peer, reply);
             return ResponseEntity.ok(Map.of("code", 0));
         }
@@ -179,6 +194,7 @@ public class FeishuChannelController {
         boolean outboundReady = appId != null && !appId.isBlank() && appSecret != null && !appSecret.isBlank();
         messages.record("feishu", peer, "outbound", sessionId, reply,
                 outboundReady ? "sent" : "pending_credentials");
+        stats.inc(outboundReady ? "feishu.agent_reply" : "feishu.agent_reply_pending_credentials");
         if (!outboundReady) {
             log.warn("[feishu] 回复已生成但未配置 EH_FEISHU_APP_ID/APP_SECRET，状态=pending_credentials（消息可审计）");
         } else {

@@ -47,18 +47,20 @@ public class WebhookChannelController {
     private final AgentRunner runner;
     private final TemplateDescriptor template;
     private final ChannelMessageStore messageStore;
+    private final ChannelStats stats;
     private final boolean enabled;
     private final String secret;
     private final boolean echo;
 
     public WebhookChannelController(AgentRunner runner, TemplateDescriptor template,
-                                    ChannelMessageStore messageStore,
+                                    ChannelMessageStore messageStore, ChannelStats stats,
                                     @Value("${channel.enabled:false}") boolean enabled,
                                     @Value("${channel.secret:}") String secret,
                                     @Value("${channel.echo:false}") boolean echo) {
         this.runner = runner;
         this.template = template;
         this.messageStore = messageStore;
+        this.stats = stats;
         this.enabled = enabled;
         this.secret = secret;
         this.echo = echo;
@@ -75,12 +77,14 @@ public class WebhookChannelController {
         if (!enabled) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
+        stats.inc("webhook.received");
         if (!echo && (secret == null || secret.isBlank())) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of("error", "渠道未配置 EH_CHANNEL_SECRET，拒绝服务"));
         }
         // 验签 + 防重放
         if (tsHeader == null || sigHeader == null) {
+            stats.inc("webhook.drop_missing_signature");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "缺少签名头"));
         }
         long ts;
@@ -90,9 +94,11 @@ public class WebhookChannelController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "时间戳非法"));
         }
         if (Math.abs(Instant.now().getEpochSecond() - ts) > REPLAY_WINDOW_SECONDS) {
+            stats.inc("webhook.drop_replay");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "时间戳超出重放窗口"));
         }
         if (!WebhookSignature.safeEquals(WebhookSignature.hmacHex(secret, tsHeader, rawBody), sigHeader)) {
+            stats.inc("webhook.drop_bad_signature");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "签名校验失败"));
         }
 
@@ -106,7 +112,11 @@ public class WebhookChannelController {
             text = root.path("text").asText(null);
             externalSessionId = root.path("externalSessionId").asText(null);
         } catch (Exception e) {
+            stats.inc("webhook.drop_bad_payload");
             return ResponseEntity.badRequest().body(Map.of("error", "载荷非法 JSON"));
+        }
+        if (peer == null || peer.isBlank() || text == null || text.isBlank()) {
+            stats.inc("webhook.drop_missing_fields");
         }
         if (peer == null || peer.isBlank() || text == null || text.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "peer 与 text 必填"));
@@ -118,11 +128,13 @@ public class WebhookChannelController {
                 + (externalSessionId == null || externalSessionId.isBlank() ? "" : "-" + externalSessionId);
 
         messageStore.record("webhook", peer, "inbound", sessionId, text, "received");
+        stats.inc("webhook.verified_inbound");
 
         // 回环测试模式：不调模型
         if (echo) {
             String reply = "【渠道回环测试】已收到消息并完成会话映射（不调模型）：text=" + text;
             messageStore.record("webhook", peer, "outbound", sessionId, reply, "echo");
+            stats.inc("webhook.echo_reply");
             return ResponseEntity.ok(Map.of(
                     "mode", "echo",
                     "peer", peer,
@@ -142,6 +154,7 @@ public class WebhookChannelController {
         messages.add(user);
         AgentRunner.AgentTurn turn = runner.run(messages, new Tool.ToolContext(userId, sessionId));
         messageStore.record("webhook", peer, "outbound", sessionId, turn.finalAnswer(), "sent");
+        stats.inc("webhook.agent_reply");
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("mode", "agent");
         out.put("peer", peer);

@@ -6,7 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 启动前置检查（治理文档 §八承诺项）：复用 ITGG resource-check 阈值，在应用启动时体检宿主机资源。
@@ -24,6 +26,18 @@ public class StartupPreflight implements ApplicationRunner {
 
     @Value("${app.preflight:${EH_PREFLIGHT:warn}}")
     private String mode;
+
+    @Value("${agent.model}")
+    private String agentModel;
+
+    @Value("${complaint.model}")
+    private String complaintModel;
+
+    @Value("${rag.embedding.model}")
+    private String embeddingModel;
+
+    @Value("${agent.base-url:http://localhost:1234/v1}")
+    private String llmBaseUrl;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -56,9 +70,57 @@ public class StartupPreflight implements ApplicationRunner {
         if (enginesRedline) {
             System.err.println("[PREFLIGHT] 红线: 推理引擎 >2 个（治理上限），请先 lms unload --all");
         }
-        if ("enforce".equalsIgnoreCase(mode) && memRedline) {
-            throw new IllegalStateException("[PREFLIGHT] enforce 模式：内存红线超限，拒绝启动（释放宿主内存或改 EH_PREFLIGHT=warn）");
+        // 配置-现实一致性检查（复盘 F2/P0）：三个配置模型必须在 LM Studio 已加载——
+        // 缺失时首条推理会触发 JIT 加载（30B=17.35GB，内存基线紧张时即事故）。enforce 下拒绝启动。
+        List<String> modelIssues = checkConfiguredModelsLoaded();
+        if ("enforce".equalsIgnoreCase(mode) && (memRedline || !modelIssues.isEmpty())) {
+            throw new IllegalStateException("[PREFLIGHT] enforce 模式拒绝启动："
+                    + (memRedline ? "内存红线超限；" : "")
+                    + (modelIssues.isEmpty() ? "" : "模型一致性: " + String.join("；", modelIssues))
+                    + "（释放资源/加载模型，或改 EH_PREFLIGHT=warn）");
         }
+    }
+
+    /**
+     * 校验 agent/complaint/embedding 三个配置模型在 LM Studio 的加载状态（/api/v0/models 的 state 字段，
+     * 不会触发 JIT）。返回问题描述列表（空=全部就绪）；LM Studio 不可达时返回单条提示（不阻断）。
+     */
+    private List<String> checkConfiguredModelsLoaded() {
+        String modelsUrl = llmBaseUrl.replaceAll("/v1/?$", "") + "/api/v0/models";
+        Map<String, String> stateById = new java.util.LinkedHashMap<>();
+        try {
+            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(modelsUrl))
+                    .timeout(java.time.Duration.ofSeconds(5)).GET().build();
+            java.net.http.HttpResponse<String> resp = java.net.http.HttpClient.newHttpClient()
+                    .send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200) {
+                return List.of("LM Studio /api/v0/models HTTP " + resp.statusCode() + "，无法校验配置模型");
+            }
+            com.fasterxml.jackson.databind.JsonNode data = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(resp.body()).path("data");
+            data.forEach(m -> stateById.put(m.path("id").asText(""), m.path("state").asText("")));
+        } catch (Exception e) {
+            return List.of("LM Studio 不可达（" + e.getMessage() + "），无法校验配置模型——推理将失败");
+        }
+        List<String> issues = new java.util.ArrayList<>();
+        Map<String, String> expected = new java.util.LinkedHashMap<>();
+        expected.put("agent(编排)", agentModel);
+        expected.put("complaint(快路径)", complaintModel);
+        expected.put("embedding(RAG/记忆)", embeddingModel);
+        expected.forEach((role, id) -> {
+            String state = stateById.get(id);
+            if (state == null) {
+                issues.add(role + " 模型 " + id + " 未下载/未注册");
+            } else if (!"loaded".equals(state)) {
+                issues.add(role + " 模型 " + id + " 未加载（state=" + state + "，首条推理将 JIT 拉起）");
+            }
+        });
+        if (issues.isEmpty()) {
+            System.err.println("[PREFLIGHT] 模型一致性: " + expected.size() + " 个配置模型全部已加载 ✓");
+        } else {
+            issues.forEach(i -> System.err.println("[PREFLIGHT] 模型一致性警告: " + i));
+        }
+        return issues;
     }
 
     private static long totalPhysical() {
