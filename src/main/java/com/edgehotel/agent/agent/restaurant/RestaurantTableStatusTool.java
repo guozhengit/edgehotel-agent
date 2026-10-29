@@ -45,7 +45,8 @@ public class RestaurantTableStatusTool implements Tool {
         String type = str(args, "table_type");
         Map<String, Integer> tables = data.tables(date, slot);
         if (tables == null) {
-            return ToolResult.empty();
+            // 对齐酒店模板：未知日期是"如实领域答案"（STANDARD），明示数据覆盖范围供模型转述
+            return ToolResult.standard("status=UNKNOWN_DATE | message=该日期暂无桌态数据（示例数据仅覆盖 2026-10-30），请如实告知顾客并以门店渠道为准");
         }
         StringBuilder sb = new StringBuilder("status=AVAILABLE | date=" + date);
         if (!slot.isBlank()) {

@@ -1,6 +1,7 @@
 package com.edgehotel.agent.agent.restaurant;
 
 import com.edgehotel.agent.agent.Tool;
+import com.edgehotel.agent.store.TicketStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -13,8 +14,11 @@ import java.util.Map;
 public class RestaurantComplaintEscalateTool implements Tool {
 
     private final Map<String, Object> schema;
+    private final TicketStore tickets;
 
-    public RestaurantComplaintEscalateTool() {
+    public RestaurantComplaintEscalateTool(TicketStore tickets) {
+        this.tickets = tickets;
+
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("type", "object");
         Map<String, Object> props = new LinkedHashMap<>();
@@ -46,10 +50,11 @@ public class RestaurantComplaintEscalateTool implements Tool {
         String guest = RestaurantTableStatusTool.str(args, "guest_name");
         String issue = RestaurantTableStatusTool.str(args, "issue");
         String table = RestaurantTableStatusTool.str(args, "table_no");
-        String ticket = "RT-" + (System.currentTimeMillis() % 100000);
+        String ticket = tickets.create("complaint", ctx.sessionId(), guest,
+                table.isBlank() ? "-" : table, issue, "OPEN");
         return ToolResult.standard("status=ESCALATED | ticket=" + ticket + " | guest=" + guest
                 + " | table_no=" + (table.isBlank() ? "-" : table) + " | issue=" + issue
-                + " | message=工单已创建，转门店值班经理跟进");
+                + " | message=工单已留痕（OPEN），转门店值班经理跟进");
     }
 
     @Override

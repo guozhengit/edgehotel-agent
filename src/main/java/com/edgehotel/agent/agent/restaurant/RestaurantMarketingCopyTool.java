@@ -1,6 +1,7 @@
 package com.edgehotel.agent.agent.restaurant;
 
 import com.edgehotel.agent.agent.Tool;
+import com.edgehotel.agent.store.TicketStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -13,8 +14,11 @@ import java.util.Map;
 public class RestaurantMarketingCopyTool implements Tool {
 
     private final Map<String, Object> schema;
+    private final TicketStore tickets;
 
-    public RestaurantMarketingCopyTool() {
+    public RestaurantMarketingCopyTool(TicketStore tickets) {
+        this.tickets = tickets;
+
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("type", "object");
         Map<String, Object> props = new LinkedHashMap<>();
@@ -50,7 +54,8 @@ public class RestaurantMarketingCopyTool implements Tool {
             case "promotion" -> guest + "您好，极味轩会员日来了！本周五前到店消费满 200 减 40，登录小程序即可领取，期待您的光临。";
             default -> "话术草稿（未识别的场景：" + scenario + "）。";
         };
-        return ToolResult.standard("status=DRAFT | scenario=" + scenario + " | draft=" + draft + " | message=仅生成草稿，发送前须审批");
+        String ref = tickets.create("marketing", ctx.sessionId(), guest, "-", draft, "DRAFT");
+        return ToolResult.standard("status=DRAFT | ref=" + ref + " | scenario=" + scenario + " | draft=" + draft + " | message=草稿已留痕，发送前须审批");
     }
 
     @Override
