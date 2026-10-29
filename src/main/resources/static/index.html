@@ -60,6 +60,24 @@
   <div class="tab" data-panel="ledger">静默失败台账</div>
   <div class="tab" data-panel="complaint">投诉识别</div>
   <div class="tab" data-panel="memory">记忆</div>
+  <div class="tab" data-panel="ops">运行视图</div>
+</div>
+
+<!-- 运行视图（M5-1） -->
+<div class="panel" id="panel-ops">
+  <div class="card">
+    <h2>运行视图（/api/ops/overview 聚合）</h2>
+    <div id="ops-kv" class="loading">加载中…</div>
+  </div>
+  <div class="card">
+    <h2>渠道决策点计数（含静默丢弃——静默失败治理延伸）</h2>
+    <table><thead><tr><th>计数键</th><th>次数</th></tr></thead><tbody id="ops-stats"></tbody></table>
+  </div>
+  <div class="card">
+    <h2>渠道消息审计（channel_messages）</h2>
+    <div class="btn-row"><button class="ghost" id="ops-refresh">刷新</button><span class="hint">最近 100 条（channel_messages 全量）</span></div>
+    <table style="margin-top:8px"><thead><tr><th>渠道</th><th>方向</th><th>peer</th><th>状态</th><th>内容</th><th>租户</th><th>时间</th></tr></thead><tbody id="ops-msgs"></tbody></table>
+  </div>
 </div>
 
 <!-- 问答编排 -->
@@ -323,6 +341,39 @@
   }
   memRecallBtn.addEventListener("click",loadMemory);
   document.getElementById("mem-query").addEventListener("keydown",function(e){ if(e.key==="Enter") loadMemory(); });
+
+  /* ---- 运行视图（M5-1） ---- */
+  function loadOps(){
+    var kv=document.getElementById("ops-kv");
+    get("/api/ops/overview").then(function(r){
+      var models=(r.models||[]).map(function(m){
+        var cls=m.state==="loaded"?"b-ok":"b-warn";
+        return '<span class="badge '+cls+'">'+esc(m.role)+':'+esc(m.state)+"</span>";
+      }).join(" ");
+      kv.innerHTML='<div class="kv"><b>模板</b>'+esc(r.template)+'</div>'+
+        '<div class="kv"><b>内存</b>'+r.memory.usedPct+'%（可用 '+r.memory.availableMb+' MB）</div>'+
+        '<div class="kv"><b>模型</b>'+models+'</div>'+
+        '<div class="kv"><b>工单</b>投诉 OPEN '+r.tickets.complaintOpen+' / 话术 DRAFT '+r.tickets.marketingDraft+'</div>'+
+        '<div class="kv"><b>运行时长</b>'+r.uptimeMinutes+' 分钟</div>';
+      var st=document.getElementById("ops-stats");
+      var keys=Object.keys(r.channelCounters||{});
+      st.innerHTML=keys.length?keys.map(function(k){
+        return '<tr><td>'+esc(k)+'</td><td>'+r.channelCounters[k]+"</td></tr>";
+      }).join(""):'<tr><td colspan="2" class="muted">暂无渠道流量</td></tr>';
+    }).catch(function(e){ kv.innerHTML='<div class="err">加载失败：'+esc(e.message)+"</div>"; });
+    var body=document.getElementById("ops-msgs");
+    body.innerHTML='<tr><td colspan="7" class="muted">加载中…</td></tr>';
+    get("/api/channel/messages").then(function(r){
+      var items=r.messages||[];
+      if(!items.length){ body.innerHTML='<tr><td colspan="7" class="muted">暂无渠道消息</td></tr>'; return; }
+      body.innerHTML=items.map(function(m){
+        var dir=m.direction==="inbound"?'<span class="badge b-info">入</span>':'<span class="badge b-ok">出</span>';
+        return '<tr><td>'+esc(m.channel)+'</td><td>'+dir+'</td><td>'+esc(m.peer)+'</td><td>'+esc(m.status)+
+          '</td><td>'+esc(m.content)+'</td><td>'+esc(m.tenant||"-")+'</td><td class="muted">'+esc(m.ts||"-")+"</td></tr>";
+      }).join("");
+    }).catch(function(e){ body.innerHTML='<tr><td colspan="7" class="err">加载失败：'+esc(e.message)+"</td></tr>"; });
+  }
+  document.getElementById("ops-refresh").addEventListener("click",loadOps);
 
   /* 初始加载 */
   loadApprovals();

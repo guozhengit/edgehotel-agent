@@ -1,7 +1,7 @@
 /*
- * 飞书回调自测夹具生成器（M4）：按飞书规范生成加密回调体——IV(16B)+AES-CBC-PKCS5，key=SHA-256(encryptKey)；
- * 签名 = sha256(ts + nonce + encryptKey + body)。无需真实平台凭据即可离线自测渠道解密/映射/落库全链路。
- * 用法: java scripts/GenFeishuFixture.java <encryptKey> '<明文JSON>'  → 输出 BODY/TS/NONCE/SIG 四行
+ * 飞书回调自测夹具生成器（M4）：按飞书规范加密——AES key=SHA-256(encryptKey)，密文=Base64(IV(16B)+AES-CBC-PKCS7)；
+ * 签名 = SHA-256(ts + nonce + encryptKey + body)。用法: java scripts/GenFeishuFixture.java <encryptKey> '<明文JSON>'
+ * 输出: BODY/TS/NONCE/SIG 四行（BODY 即加密信封 JSON，POST 体原样使用）。
  */
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
