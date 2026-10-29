@@ -1,0 +1,20 @@
+# --- EdgeHotel-Agent .gitignore（如启用 git 版本管理）---
+# 构建产物
+target/
+# 运行时数据（SQLite 库——见 backup-edgehotel-db.ps1 备份策略）
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+# 运行日志（应用/stdout 重定向）
+*.log
+*.err.log
+# AgentScope 运行时工作区（会话/记忆，属运行时产物）
+.agentscope/
+# IDE
+.idea/
+*.iml
+.vscode/
+# 系统
+Thumbs.db
+.DS_Store

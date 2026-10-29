@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "title": "EdgeHotel-Agent 酒店问答测试集（M0-3）",
+    "purpose": "评估 RAG 检索命中率（出口标准 ≥85%）与问答闭环质量",
+    "knowledge_base": "D:/AI/edgehotel-agent/data/hotel-knowledge-base.md",
+    "total": 30,
+    "difficulty": {"easy": 12, "medium": 12, "hard": 6},
+    "checked_at": "2026-10-29",
+    "note": "每题 source_kb 指向知识库唯一 ID；expected_answer 要点取自知识库原文，检索评估时以 source_kb 为命中标准。"
+  },
+  "questions": [
+    {"id": "Q01", "category": "facilities", "difficulty": "easy", "question": "酒店的健身房几点开放？住客需要付费吗？", "source_kb": ["KB-01"], "expected_answer": ["健身房位于3层", "开放时间06:00-22:00", "住客凭房卡免费使用"]},
+    {"id": "Q02", "category": "facilities", "difficulty": "easy", "question": "早餐多少钱？儿童收费吗？", "source_kb": ["KB-02"], "expected_answer": ["自助早餐06:30-10:00位于1层极光厅", "含早房型免费", "现场加购成人88元/位", "1.2米以下儿童免费"]},
+    {"id": "Q03", "category": "facilities", "difficulty": "medium", "question": "我下午三点退房，上午想先把脏衣服送洗，什么时候能拿回来？", "source_kb": ["KB-03"], "expected_answer": ["当日12:00前送洗当日20:00前送回", "普通水洗按件计费", "下午三点退房可先取回或转寄存"]},
+    {"id": "Q04", "category": "facilities", "difficulty": "medium", "question": "开车来酒店，停车怎么收费？周末晚上会不会没位置？", "source_kb": ["KB-04"], "expected_answer": ["住客凭房卡退房时办理免费停车", "非住客10元/小时每日60元封顶", "车位在B1-B2", "周末18:00-20:00紧张建议提前问前台"]},
+    {"id": "Q05", "category": "checkin", "difficulty": "easy", "question": "标准入住和退房时间是几点？", "source_kb": ["KB-05"], "expected_answer": ["入住14:00起", "退房12:00前", "超时12:00-14:00加收半天房费", "14:00后加收全天"]},
+    {"id": "Q06", "category": "checkin", "difficulty": "medium", "question": "我订的是官方直订的会员专属价房型，第二天想下午2点再退房，可以吗？", "source_kb": ["KB-06", "KB-13"], "expected_answer": ["会员专属价含延迟退房至14:00权益", "限官方渠道订单", "金卡及以上可延至15:00视房态"]},
+    {"id": "Q07", "category": "checkin", "difficulty": "easy", "question": "我早上10点就到酒店了，还不能入住，行李怎么办？", "source_kb": ["KB-07"], "expected_answer": ["可免费寄存行李", "前台办理发放寄存牌", "贵重物品随身或存保险柜"]},
+    {"id": "Q08", "category": "checkin", "difficulty": "medium", "question": "房卡丢了怎么办？会不会有人能拿我的卡进房间？", "source_kb": ["KB-08"], "expected_answer": ["立即通知前台挂失并补办", "补卡免费需出示身份证件", "每间标准2张卡"]},
+    {"id": "Q09", "category": "checkin", "difficulty": "hard", "question": "会员想同时申请提前入住和延迟退房，官方直订订单，需要满足什么条件？", "source_kb": ["KB-05", "KB-06", "KB-13"], "expected_answer": ["提前入住不保证视房态需前台登记", "延迟退房至14:00为会员专属价权益", "均限官方渠道订单", "金卡可延至15:00"]},
+    {"id": "Q10", "category": "room", "difficulty": "easy", "question": "房间WiFi怎么连？", "source_kb": ["KB-09"], "expected_answer": ["SSID为Aurora-Guest", "认证页输入房号与姓名拼音", "单设备限速50Mbps"]},
+    {"id": "Q11", "category": "room", "difficulty": "easy", "question": "房间空调不制冷怎么办？", "source_kb": ["KB-10"], "expected_answer": ["拨0报修", "工程部30分钟内响应", "面板可调18-28℃"]},
+    {"id": "Q12", "category": "room", "difficulty": "medium", "question": "带小宝宝入住，想加一张婴儿床，怎么申请？收费吗？", "source_kb": ["KB-11"], "expected_answer": ["婴儿床免费", "提前1天在前台预订", "数量有限需入住时登记", "加床120元/晚含被品早餐"]},
+    {"id": "Q13", "category": "room", "difficulty": "medium", "question": "住了四晚，想换床单被套，酒店默认多久换一次？", "source_kb": ["KB-12"], "expected_answer": ["默认2天更换一次", "连续住3晚以上可申请更换床品", "挂请勿打扰牌不清洁"]},
+    {"id": "Q14", "category": "booking", "difficulty": "easy", "question": "官方直订和OTA平台订，哪个更便宜？", "source_kb": ["KB-13", "KB-14"], "expected_answer": ["官方直订享会员专属价", "平均比OTA便宜10%-15%", "OTA订单不累积会员积分"]},
+    {"id": "Q15", "category": "booking", "difficulty": "medium", "question": "我在美团上订了房，能享受延迟退房和积分吗？", "source_kb": ["KB-14", "KB-06"], "expected_answer": ["OTA订单不累积Aurora会员积分", "不承诺匹配官方直订权益", "基础住店服务按订单约定"]},
+    {"id": "Q16", "category": "booking", "difficulty": "easy", "question": "退房的时候怎么开发票？", "source_kb": ["KB-15"], "expected_answer": ["退房时前台开具电子普通发票", "开票信息需入住时登记完整", "离店后30天内可补开"]},
+    {"id": "Q17", "category": "booking", "difficulty": "medium", "question": "订了官方渠道的标准价订单，行程有变，最晚什么时候能免费取消？", "source_kb": ["KB-16", "KB-13"], "expected_answer": ["入住前1天18:00前可免费取消", "特惠活动价按页面规则通常不可取消", "退款原路退回3-5个工作日"]},
+    {"id": "Q18", "category": "booking", "difficulty": "hard", "question": "客人既想改期又想开发票，官方直订单，退款和发票分别怎么处理？", "source_kb": ["KB-15", "KB-16", "KB-13"], "expected_answer": ["改期视目标日期房态差价多退少补", "退款原路退回3-5个工作日", "发票按实际入住开具", "特惠价订单按页面规则"]},
+    {"id": "Q19", "category": "surrounding", "difficulty": "easy", "question": "酒店离地铁站多远？坐几号线？", "source_kb": ["KB-17"], "expected_answer": ["2号线极光大厦站B口", "步行约8分钟"]},
+    {"id": "Q20", "category": "surrounding", "difficulty": "easy", "question": "从酒店去首都机场方便吗？", "source_kb": ["KB-17"], "expected_answer": ["机场大巴3号线停靠酒店正门", "约5:30-21:00每小时一班", "大兴机场建议地铁换乘"]},
+    {"id": "Q21", "category": "surrounding", "difficulty": "medium", "question": "下午想去附近城市公园，要注意什么？", "source_kb": ["KB-18"], "expected_answer": ["车程15分钟", "周一闭园", "门票免费", "须在官方公众号预约"]},
+    {"id": "Q22", "category": "complaint", "difficulty": "easy", "question": "房间有问题要投诉，流程是怎样的？多久有人响应？", "source_kb": ["KB-19"], "expected_answer": ["前台统一受理登记", "15分钟内响应", "设施故障转工程部2小时内到场", "升级路径前台→值班经理→店长"]},
+    {"id": "Q23", "category": "complaint", "difficulty": "medium", "question": "投诉之后酒店会怎么跟进？会有补偿吗？", "source_kb": ["KB-20"], "expected_answer": ["补偿须值班经理确认（房费折扣/早餐/积分）", "24小时内电话回访确认满意度", "不满意升级店长二次跟进", "重大客诉当天上报留痕"]},
+    {"id": "Q24", "category": "complaint", "difficulty": "hard", "question": "晚上10点的投诉，前台处理不了，客人要求今天必须解决，值班经理怎么响应？", "source_kb": ["KB-19", "KB-20"], "expected_answer": ["前台当班处理15分钟内响应", "当日20:00前无法闭环的投诉升级值班经理", "补偿须值班经理确认", "闭环后24小时内回访"]},
+    {"id": "Q25", "category": "member", "difficulty": "easy", "question": "怎么加入会员？消费怎么累积积分？", "source_kb": ["KB-21"], "expected_answer": ["注册Aurora会员免费", "官方直订消费每1元积1分", "入住后48小时入账", "积分有效期24个月"]},
+    {"id": "Q26", "category": "member", "difficulty": "medium", "question": "积分能换什么？", "source_kb": ["KB-21"], "expected_answer": ["延迟退房2000分/次", "免费早餐3000分/份", "房型升级5000分起视房态"]},
+    {"id": "Q27", "category": "member", "difficulty": "medium", "question": "会员储值有什么好处？储值金能退款吗？", "source_kb": ["KB-22"], "expected_answer": ["500起充享储值专享价约95折", "可用于房费与店内消费", "有效期12个月", "未消费部分可原路退回需7个工作日"]},
+    {"id": "Q28", "category": "member", "difficulty": "hard", "question": "会员生日当月入住，想叠加储值专享价，可以吗？", "source_kb": ["KB-23", "KB-22"], "expected_answer": ["生日礼遇含免费升房/延迟退房/蛋糕券", "礼遇与其它优惠可叠加", "储值专享价除外不可叠加", "礼遇仅限本人入住订单"]},
+    {"id": "Q29", "category": "script", "difficulty": "medium", "question": "员工遇到客人问不确定的信息，话术红线是什么？", "source_kb": ["KB-25"], "expected_answer": ["禁止承诺不确定内容", "回复我帮您核实后回复", "禁止编造酒店服务", "承诺须值班经理30分钟内书面确认"]},
+    {"id": "Q30", "category": "script", "difficulty": "hard", "question": "客人说OTA上价格更低，前台怎么用官方直订话术回应？", "source_kb": ["KB-26", "KB-13", "KB-25"], "expected_answer": ["强调会员专属价/延迟退房/升房机会/取消更灵活", "不贬低OTA用官方渠道权益更完整表述", "用平均省10%-15%而非绝对数字承诺"]}
+  ]
+}

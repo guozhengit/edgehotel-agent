@@ -1,0 +1,44 @@
+server:
+  # 端口规划 2026-10-29：80xx/81xx/82xx/83xx/84xx 已被多项目占用，EdgeHotel 系分配 86xx 段
+  port: 8600
+
+spring:
+  main:
+    banner-mode: "off"
+
+rag:
+  embedding:
+    # Qwen3-Embedding-0.6B Q8_0（LM Studio 已注册）
+    model: "text-embedding-qwen__qwen3-embedding-0.6b"
+    base-url: "http://localhost:1234/v1"
+
+agent:
+  # 工具编排模型（M1-1 function calling）
+  model: "qwen3-30b-a3b"
+  base-url: "http://localhost:1234/v1"
+  max-tool-rounds: 3
+
+complaint:
+  # 投诉识别模型（M1-2，短文本分类走 9B 快路径）
+  model: "qwen/qwen3.5-9b"
+  base-url: "http://localhost:1234/v1"
+
+agentscope:
+  model:
+    provider: openai
+  openai:
+    enabled: true
+    # LM Studio 不校验 API Key，占位即可
+    api-key: "lm-studio"
+    # LM Studio 已装模型（骨干）；快路径可切换 qwen/qwen3.5-9b
+    model-name: "qwen3-30b-a3b"
+    # LM Studio OpenAI 兼容端点
+    base-url: "http://localhost:1234/v1"
+    stream: true
+  agent:
+    # 关闭 core starter 的自动 ReActAgent/Memory/Toolkit（本工程用自定义 HarnessAgent）
+    enabled: false
+
+logging:
+  level:
+    io.agentscope: INFO

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EdgeHotel Agent Console v0</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --line:#dde3ea; --text:#1f2937; --muted:#6b7280;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a; --warn:#d97706; --danger:#dc2626; --info:#0ea5e9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif;padding:20px}
+  header{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+  header h1{font-size:20px;font-weight:600}
+  header span{color:var(--muted);font-size:13px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .tab{padding:8px 16px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;color:var(--muted)}
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .panel{display:none}
+  .panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:15px;margin-bottom:10px;font-weight:600}
+  textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;resize:vertical}
+  button{padding:8px 18px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:#fff;border:1px solid var(--line);color:var(--text)}
+  button.ok{background:var(--ok)} button.warn{background:var(--warn)} button.danger{background:var(--danger)}
+  .btn-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .btn-row .hint{color:var(--muted);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;word-break:break-all}
+  th{color:var(--muted);font-weight:600;background:#fafbfc}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;white-space:nowrap}
+  .b-ok{background:#ecfdf3;color:var(--ok)} .b-warn{background:#fffbeb;color:var(--warn)}
+  .b-danger{background:#fef2f2;color:var(--danger)} .b-info{background:#ecfeff;color:var(--info)}
+  .b-gray{background:#f3f4f6;color:var(--muted)}
+  .answer{background:var(--accent-soft);border-left:3px solid var(--accent);padding:12px;border-radius:0 8px 8px 0;white-space:pre-wrap}
+  .warn-box{background:#fffbeb;border-left:3px solid var(--warn);padding:10px 12px;border-radius:0 8px 8px 0;margin-top:8px;font-size:13px}
+  .ap-box{background:#fef2f2;border-left:3px solid var(--danger);padding:10px 12px;border-radius:0 8px 8px 0;margin-top:8px;font-size:13px}
+  .tool-call{font-family:Consolas,monospace;background:#f8fafc;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;margin:2px 0;word-break:break-all}
+  .muted{color:var(--muted);font-size:12px}
+  .row-flex{display:flex;gap:10px;flex-wrap:wrap}
+  .kv{display:flex;gap:8px;margin:4px 0}
+  .kv b{min-width:110px;color:var(--muted);font-weight:600}
+  .loading{color:var(--muted)}
+  .err{color:var(--danger)}
+</style>
+</head>
+<body>
+<header>
+  <h1>EdgeHotel Agent Console</h1>
+  <span>v0 · M1 MVP · API 端口 8600 · 模型 LM Studio (1234)</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-panel="ask">问答编排</div>
+  <div class="tab" data-panel="approval">审批门</div>
+  <div class="tab" data-panel="ledger">静默失败台账</div>
+  <div class="tab" data-panel="complaint">投诉识别</div>
+  <div class="tab" data-panel="memory">记忆</div>
+</div>
+
+<!-- 问答编排 -->
+<div class="panel active" id="panel-ask">
+  <div class="card">
+    <h2>对客问答（工具编排 /api/agent/ask）</h2>
+    <textarea id="ask-input" placeholder="例：帮我查一下明天晚上标准间有没有房 / 房间空调坏了我要投诉，升级人工处理"></textarea>
+    <div class="btn-row">
+      <button id="ask-btn">发送</button>
+      <span class="hint">提问时模型可自动调用工具（房态/房价/订单/投诉升级）</span>
+    </div>
+    <div id="ask-result"></div>
+  </div>
+</div>
+
+<!-- 审批门 -->
+<div class="panel" id="panel-approval">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2>待审批队列（敏感写操作默认拦截）</h2>
+      <button class="ghost" id="approval-refresh">刷新</button>
+    </div>
+    <table>
+      <thead><tr><th>审批ID</th><th>工具</th><th>参数</th><th>提交时间</th><th>操作</th></tr></thead>
+      <tbody id="approval-body"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">全部审批记录（含已决）见 <code>/api/approval/all</code>，100% 留痕。</p>
+  </div>
+</div>
+
+<!-- 台账 -->
+<div class="panel" id="panel-ledger">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2>静默失败台账</h2>
+      <button class="ghost" id="ledger-refresh">刷新</button>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>工具</th><th>类别</th><th>根因</th><th>恢复策略</th><th>时间</th></tr></thead>
+      <tbody id="ledger-body"><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 投诉识别 -->
+<div class="panel" id="panel-complaint">
+  <div class="card">
+    <h2>投诉识别（/api/complaint/detect）</h2>
+    <textarea id="ct-input" placeholder="输入客人消息，判断是否投诉…"></textarea>
+    <div class="btn-row"><button id="ct-btn">检测</button></div>
+    <div id="ct-result"></div>
+  </div>
+</div>
+
+<!-- 记忆（M2-2 跨会话） -->
+<div class="panel" id="panel-memory">
+  <div class="card">
+    <h2>写入记忆（/api/memory/add · 自动向量化）</h2>
+    <div class="row-flex">
+      <div style="flex:1;min-width:120px">
+        <div class="muted" style="margin-bottom:4px">客人ID（scope_id）</div>
+        <input id="mem-guest" value="u-6688" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      </div>
+      <div style="flex:3;min-width:240px">
+        <div class="muted" style="margin-bottom:4px">记忆内容</div>
+        <textarea id="mem-content" style="min-height:64px" placeholder="例：李女士偏好安静的高层房间，离店后喜欢收到满意度回访"></textarea>
+      </div>
+    </div>
+    <div class="btn-row"><button id="mem-add-btn">写入记忆</button><span id="mem-add-msg" class="hint"></span></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2>检索记忆（/api/memory/recall · 向量语义召回）</h2>
+      <button class="ghost" id="mem-recall-btn">检索</button>
+    </div>
+    <div class="row-flex" style="margin-bottom:8px">
+      <div style="flex:2;min-width:240px">
+        <div class="muted" style="margin-bottom:4px">查询问题</div>
+        <input id="mem-query" placeholder="例：这位客人订房时有什么偏好" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      </div>
+      <div style="flex:1;min-width:120px">
+        <div class="muted" style="margin-bottom:4px">客人ID（scope_id）</div>
+        <input id="mem-query-guest" value="u-6688" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>内容</th><th>来源步骤</th><th>时间</th></tr></thead>
+      <tbody id="mem-body"><tr><td colspan="4" class="muted">输入问题后点「检索」…</td></tr></tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">编排循环自动以 <code>guest:userId</code> 召回 top5 记忆注入 system prompt（AgentRunner 已挂载）。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var tabs=document.querySelectorAll(".tab");
+  tabs.forEach(function(t){
+    t.addEventListener("click",function(){
+      tabs.forEach(function(x){x.classList.remove("active")});
+      t.classList.add("active");
+      document.querySelectorAll(".panel").forEach(function(p){p.classList.remove("active")});
+      document.getElementById("panel-"+t.dataset.panel).classList.add("active");
+    });
+  });
+
+  function post(path,payload,timeout){
+    return fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json()});
+  }
+  function get(path){
+    return fetch(path).then(function(r){return r.json()});
+  }
+  function esc(s){
+    return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+    });
+  }
+
+  /* ---- 问答编排 ---- */
+  var askBtn=document.getElementById("ask-btn");
+  var askInput=document.getElementById("ask-input");
+  var askResult=document.getElementById("ask-result");
+  askBtn.addEventListener("click",function(){
+    var q=askInput.value.trim();
+    if(!q) return;
+    askBtn.disabled=true;
+    askResult.innerHTML='<div class="loading">模型编排中（含工具调用时约 10-20s）…</div>';
+    post("/api/agent/ask",{question:q,userId:"console"}).then(function(r){
+      var html='<div class="answer">'+esc(r.answer)+"</div>";
+      var calls=r.tool_calls||[];
+      if(calls.length){
+        html+='<div style="margin-top:8px"><span class="muted">工具调用轨迹：</span>';
+        calls.forEach(function(c){html+='<div class="tool-call">'+esc(c)+"</div>"});
+        html+="</div>";
+      }
+      (r.verifier_warnings||[]).forEach(function(w){
+        html+='<div class="warn-box">⚠ 校验警告：'+esc(w)+"</div>";
+      });
+      (r.approvals||[]).forEach(function(a){
+        html+='<div class="ap-box">⛔ 审批门拦截：'+esc(a)+"</div>";
+      });
+      if(r.error) html='<div class="err">'+esc(r.error)+"</div>";
+      askResult.innerHTML=html;
+      askBtn.disabled=false;
+    }).catch(function(e){
+      askResult.innerHTML='<div class="err">请求失败：'+esc(e.message)+"</div>";
+      askBtn.disabled=false;
+    });
+  });
+
+  /* ---- 审批门 ---- */
+  function statusBadge(s){
+    if(s==="granted") return '<span class="badge b-ok">已放行</span>';
+    if(s==="denied") return '<span class="badge b-danger">已拒绝</span>';
+    return '<span class="badge b-warn">待审批</span>';
+  }
+  function loadApprovals(){
+    var body=document.getElementById("approval-body");
+    body.innerHTML='<tr><td colspan="5" class="muted">加载中…</td></tr>';
+    get("/api/approval/pending").then(function(list){
+      if(!list.length){ body.innerHTML='<tr><td colspan="5" class="muted">无待审批操作</td></tr>'; return; }
+      var html="";
+      list.forEach(function(a){
+        html+='<tr><td><b>'+esc(a.id)+'</b></td><td>'+esc(a.toolName)+'</td>'+
+          '<td style="max-width:300px">'+esc(a.argsSummary)+'</td><td>'+esc(a.ts)+'</td>'+
+          '<td><button class="ok" data-grant="'+esc(a.id)+'" style="margin-right:6px">放行</button>'+
+          '<button class="danger" data-deny="'+esc(a.id)+'">拒绝</button></td></tr>';
+      });
+      body.innerHTML=html;
+      body.querySelectorAll("[data-grant]").forEach(function(b){
+        b.addEventListener("click",function(){
+          post("/api/approval/"+b.dataset.grant+"/grant",{operator:"console"}).then(function(){loadApprovals()});
+        });
+      });
+      body.querySelectorAll("[data-deny]").forEach(function(b){
+        b.addEventListener("click",function(){
+          var reason=window.prompt("拒绝原因：","人工已线下处理");
+          if(reason==null) return;
+          post("/api/approval/"+b.dataset.deny+"/deny",{operator:"console",reason:reason}).then(function(){loadApprovals()});
+        });
+      });
+    }).catch(function(e){ body.innerHTML='<tr><td colspan="5" class="err">加载失败：'+esc(e.message)+"</td></tr>"; });
+  }
+  document.getElementById("approval-refresh").addEventListener("click",loadApprovals);
+
+  /* ---- 台账 ---- */
+  function loadLedger(){
+    var body=document.getElementById("ledger-body");
+    body.innerHTML='<tr><td colspan="6" class="muted">加载中…</td></tr>';
+    get("/api/verifier/ledger").then(function(r){
+      var entries=r.entries||[];
+      if(!entries.length){ body.innerHTML='<tr><td colspan="6" class="muted">无记录（total='+r.total+'）</td></tr>'; return; }
+      var html="";
+      entries.forEach(function(e){
+        var cat=e.category==="empty_result"||e.category==="blank_output"
+          ? '<span class="badge b-warn">静默失败</span>' : '<span class="badge b-danger">显式失败</span>';
+        html+='<tr><td>'+e.id+'</td><td>'+esc(e.toolName)+'</td><td>'+cat+'</td>'+
+          '<td>'+esc(e.rootCause)+'</td><td>'+esc(e.recovery)+'</td><td>'+esc(e.ts)+"</td></tr>";
+      });
+      body.innerHTML=html;
+    }).catch(function(e){ body.innerHTML='<tr><td colspan="6" class="err">加载失败：'+esc(e.message)+"</td></tr>"; });
+  }
+  document.getElementById("ledger-refresh").addEventListener("click",loadLedger);
+
+  /* ---- 投诉识别 ---- */
+  var ctBtn=document.getElementById("ct-btn");
+  var ctInput=document.getElementById("ct-input");
+  var ctResult=document.getElementById("ct-result");
+  ctBtn.addEventListener("click",function(){
+    var t=ctInput.value.trim();
+    if(!t) return;
+    ctBtn.disabled=true;
+    ctResult.innerHTML='<div class="loading">识别中…</div>';
+    post("/api/complaint/detect",{text:t}).then(function(r){
+      var badge=r.is_complaint?'<span class="badge b-danger">投诉</span>':'<span class="badge b-ok">非投诉</span>';
+      ctResult.innerHTML='<div class="kv"><b>判定</b>'+badge+
+        '<span class="muted" style="margin-left:12px">置信度 '+Math.round((r.confidence||0)*100)+'%</span></div>'+
+        '<div class="kv"><b>类别</b>'+esc(r.category)+"</div>"+
+        '<div class="kv"><b>理由</b>'+esc(r.reason)+"</div>";
+      ctBtn.disabled=false;
+    }).catch(function(e){
+      ctResult.innerHTML='<div class="err">请求失败：'+esc(e.message)+"</div>";
+      ctBtn.disabled=false;
+    });
+  });
+
+  /* ---- 记忆（M2-2） ---- */
+  var memAddBtn=document.getElementById("mem-add-btn");
+  var memAddMsg=document.getElementById("mem-add-msg");
+  memAddBtn.addEventListener("click",function(){
+    var content=document.getElementById("mem-content").value.trim();
+    var guest=document.getElementById("mem-guest").value.trim()||"u-6688";
+    if(!content){ memAddMsg.textContent="内容不能为空"; return; }
+    memAddBtn.disabled=true;
+    post("/api/memory/add",{scope_type:"guest",scope_id:guest,content:content,source_step:"console"}).then(function(r){
+      memAddMsg.textContent=r.ok?("已写入 memory_id="+r.memory_id):("失败："+r.error);
+      document.getElementById("mem-content").value="";
+      memAddBtn.disabled=false;
+    }).catch(function(e){ memAddMsg.textContent="写入失败："+e.message; memAddBtn.disabled=false; });
+  });
+  var memRecallBtn=document.getElementById("mem-recall-btn");
+  function loadMemory(){
+    var q=document.getElementById("mem-query").value.trim();
+    if(!q){ return; }
+    var guest=document.getElementById("mem-query-guest").value.trim()||"u-6688";
+    var body=document.getElementById("mem-body");
+    body.innerHTML='<tr><td colspan="4" class="muted">检索中（向量化约 1-2s）…</td></tr>';
+    get("/api/memory/recall?scope_type=guest&scope_id="+encodeURIComponent(guest)+"&query="+encodeURIComponent(q)+"&top_k=5")
+      .then(function(r){
+        var items=r.items||[];
+        if(r.error){ body.innerHTML='<tr><td colspan="4" class="err">'+esc(r.error)+"</td></tr>"; return; }
+        if(!items.length){ body.innerHTML='<tr><td colspan="4" class="muted">无相关记忆</td></tr>'; return; }
+        var html="";
+        items.forEach(function(it,i){
+          html+='<tr><td>'+(i+1)+'</td><td>'+esc(it.content)+'</td>'+
+            '<td>'+esc(it.sourceStep||"-")+'</td><td>'+esc(it.ts||"-")+"</td></tr>";
+        });
+        body.innerHTML=html;
+      }).catch(function(e){ body.innerHTML='<tr><td colspan="4" class="err">加载失败：'+esc(e.message)+"</td></tr>"; });
+  }
+  memRecallBtn.addEventListener("click",loadMemory);
+  document.getElementById("mem-query").addEventListener("keydown",function(e){ if(e.key==="Enter") loadMemory(); });
+
+  /* 初始加载 */
+  loadApprovals();
+  loadLedger();
+})();
+</script>
+</body>
+</html>
