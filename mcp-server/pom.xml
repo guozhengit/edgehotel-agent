@@ -41,6 +41,17 @@
             <artifactId>slf4j-simple</artifactId>
             <version>2.0.13</version>
         </dependency>
+        <!-- Streamable HTTP 传输：内嵌 Jetty 12（EE10 servlet 容器）承载 MCP servlet，端口 8601 -->
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-server</artifactId>
+            <version>12.0.15</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty.ee10</groupId>
+            <artifactId>jetty-ee10-servlet</artifactId>
+            <version>12.0.15</version>
+        </dependency>
     </dependencies>
 
     <build>

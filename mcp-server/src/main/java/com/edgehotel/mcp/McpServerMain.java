@@ -3,50 +3,111 @@ package com.edgehotel.mcp;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.McpJsonMapperSupplier;
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServer;
+import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.server.Server;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.BiFunction;
 
 /**
- * EdgeHotel MCP Server（HotelOps Template，独立打包，stdio 传输）。
+ * EdgeHotel MCP Server（HotelOps Template，独立打包）。
+ *
+ * <p>双传输：
+ * <ul>
+ *   <li>默认 stdio：`java -jar edgehotel-mcp-server.jar`（MCP 客户端拉起进程）</li>
+ *   <li>Streamable HTTP：`java -jar edgehotel-mcp-server.jar --http [端口]`（默认 8601，路径 /mcp）</li>
+ * </ul>
  *
  * <p>对齐落地方案 §4.3 工具清单：读 3（房态/房价/订单）+ 写 2（投诉升级/话术生成）+ 会员脱敏查询。
  * 敏感写工具由调用方（Agent Runtime / 审批门）拦截；本 Server 仅提供工具语义与执行。
- *
- * <p>接入方式（任意 MCP 客户端）：配置 command=java, args=[-jar, edgehotel-mcp-server.jar]。
  */
 public class McpServerMain {
 
     public static void main(String[] args) throws Exception {
         HotelData data = new HotelData();
-
         McpJsonMapper mapper = ServiceLoader.load(McpJsonMapperSupplier.class).findFirst()
                 .orElseThrow(() -> new IllegalStateException("未找到 McpJsonMapper SPI 实现（需 mcp-json 依赖）"))
                 .get();
 
+        boolean httpMode = args.length > 0 && "--http".equals(args[0]);
+        if (httpMode) {
+            int port = args.length > 1 ? Integer.parseInt(args[1]) : 8601;
+            startHttp(data, mapper, port);
+        } else {
+            startStdio(data, mapper);
+        }
+    }
+
+    /** stdio 传输（默认）。build() 即启动会话循环；stdin EOF 自然退出。 */
+    private static void startStdio(HotelData data, McpJsonMapper mapper) throws Exception {
         McpSyncServer server = McpServer.sync(new StdioServerTransportProvider(mapper))
                 .serverInfo("edgehotel-mcp", "0.1.0")
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
-                .tool(toolSpec("hotel_room_status",
-                        "查询酒店指定日期与房型的可订房态。参数：date=YYYY-MM-DD，room_type=standard|deluxe|suite。示例数据仅覆盖 2026-10-30 至 2026-11-01；未知日期返回 UNKNOWN_DATE，务必如实转述，不得编造。"),
-                        (exchange, a) -> ok(data.roomStatus(str(a, "date"), str(a, "room_type"))))
-                .tool(toolSpec("hotel_price_quote",
-                        "查询酒店房型价格（含早餐信息）。参数：room_type=standard|deluxe|suite。示例数据。"),
-                        (exchange, a) -> ok(data.price(str(a, "room_type"))))
-                .tool(toolSpec("hotel_booking_lookup",
-                        "按订单号查询订单状态。参数：order_id。示例数据仅 B20261001/B20261002。"),
-                        (exchange, a) -> ok(data.booking(str(a, "order_id"))))
-                .tool(toolSpec("member_profile_query",
-                        "查询会员等级与偏好摘要（脱敏：不含手机号/证件等隐私字段）。参数：member_id。示例 M-1001/M-1002。"),
-                        (exchange, a) -> ok(data.member(str(a, "member_id"))))
-                .tool(toolSpec("complaint_escalate",
-                        "创建投诉/人工升级工单（敏感写操作，调用方须走审批门；返回工单号供留痕）。参数：guest_name、room_no、issue。"),
+                .tools(tools(data))
+                .build();
+        Runtime.getRuntime().addShutdownHook(new Thread(server::close));
+        new CountDownLatch(1).await();
+    }
+
+    /** Streamable HTTP 传输（--http [port]，默认 8601，路径 /mcp）。 */
+    private static void startHttp(HotelData data, McpJsonMapper mapper, int port) throws Exception {
+        HttpServletStreamableServerTransportProvider provider =
+                HttpServletStreamableServerTransportProvider.builder()
+                        .jsonMapper(mapper)
+                        .mcpEndpoint("/mcp")
+                        .build();
+        McpSyncServer server = McpServer.sync(provider)
+                .serverInfo("edgehotel-mcp", "0.1.0")
+                .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
+                .tools(tools(data))
+                .build();
+
+        Server jetty = new Server(port);
+        ServletContextHandler ctx = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        ctx.setContextPath("/");
+        ctx.addServlet(new ServletHolder(provider), "/mcp");
+        jetty.setHandler(ctx);
+        jetty.start();
+        System.out.println("edgehotel-mcp-server (HTTP) listening on http://localhost:" + port + "/mcp");
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            server.close();
+            try {
+                jetty.stop();
+            } catch (Exception ignored) {
+                // 停机钩子内忽略二次异常
+            }
+        }));
+        jetty.join();
+    }
+
+    // ---------- 工具注册 ----------
+
+    private static List<McpServerFeatures.SyncToolSpecification> tools(HotelData data) {
+        return List.of(
+                toolSpec("hotel_room_status",
+                        "查询酒店指定日期与房型的可订房态。参数：date=YYYY-MM-DD，room_type=standard|deluxe|suite。示例数据仅覆盖 2026-10-30 至 2026-11-01；未知日期返回 UNKNOWN_DATE，务必如实转述，不得编造。",
+                        (exchange, a) -> ok(data.roomStatus(str(a, "date"), str(a, "room_type")))),
+                toolSpec("hotel_price_quote",
+                        "查询酒店房型价格（含早餐信息）。参数：room_type=standard|deluxe|suite。示例数据。",
+                        (exchange, a) -> ok(data.price(str(a, "room_type")))),
+                toolSpec("hotel_booking_lookup",
+                        "按订单号查询订单状态。参数：order_id。示例数据仅 B20261001/B20261002。",
+                        (exchange, a) -> ok(data.booking(str(a, "order_id")))),
+                toolSpec("member_profile_query",
+                        "查询会员等级与偏好摘要（脱敏：不含手机号/证件等隐私字段）。参数：member_id。示例 M-1001/M-1002。",
+                        (exchange, a) -> ok(data.member(str(a, "member_id")))),
+                toolSpec("complaint_escalate",
+                        "创建投诉/人工升级工单（敏感写操作，调用方须走审批门；返回工单号供留痕）。参数：guest_name、room_no、issue。",
                         (exchange, a) -> {
                             Map<String, String> r = new LinkedHashMap<>();
                             r.put("status", "ESCALATED");
@@ -56,9 +117,9 @@ public class McpServerMain {
                             r.put("issue", str(a, "issue"));
                             r.put("message", "工单已创建，转人工跟进");
                             return ok(r);
-                        })
-                .tool(toolSpec("marketing_copy_generate",
-                        "生成私域营销/关怀话术草稿（敏感写操作，调用方须走审批门；仅生成草稿不发送）。参数：scenario=welcome|departure|promotion，guest_name。"),
+                        }),
+                toolSpec("marketing_copy_generate",
+                        "生成私域营销/关怀话术草稿（敏感写操作，调用方须走审批门；仅生成草稿不发送）。参数：scenario=welcome|departure|promotion，guest_name。",
                         (exchange, a) -> {
                             String scenario = str(a, "scenario");
                             String guest = str(a, "guest_name");
@@ -74,26 +135,22 @@ public class McpServerMain {
                             r.put("draft", draft);
                             r.put("message", "仅生成草稿，发送前须审批");
                             return ok(r);
-                        })
-                .build();
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            server.close();
-            System.err.println("edgehotel-mcp-server closed");
-        }));
-
-        // build() 即启动 stdio 会话循环；main 阻塞保持进程存活，stdin EOF 时自然退出
-        new CountDownLatch(1).await();
+                        }));
     }
 
-    private static McpSchema.Tool toolSpec(String name, String description) {
+    private static McpServerFeatures.SyncToolSpecification toolSpec(String name, String description,
+                                                                    BiFunction<io.modelcontextprotocol.server.McpSyncServerExchange, Map<String, Object>, McpSchema.CallToolResult> handler) {
         // 宽松 inputSchema（仅声明 object 类型）；参数说明置于 description，工具内自行校验缺参
         McpSchema.JsonSchema schema = new McpSchema.JsonSchema(
                 "object", Map.of(), List.of(), false, Map.of(), Map.of());
-        return McpSchema.Tool.builder()
+        McpSchema.Tool t = McpSchema.Tool.builder()
                 .name(name)
                 .description(description)
                 .inputSchema(schema)
+                .build();
+        return McpServerFeatures.SyncToolSpecification.builder()
+                .tool(t)
+                .callHandler((exchange, request) -> handler.apply(exchange, request.arguments()))
                 .build();
     }
 

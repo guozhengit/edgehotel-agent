@@ -1,7 +1,7 @@
 # EdgeHotel MCP Server（HotelOps Template）
 
-端侧酒店私域运营 Agent 的**自建 Java MCP Server**（独立打包、stdio 传输）。
-对齐落地方案 §4.3 工具清单，供任意 MCP 客户端（Claude Desktop / 自建 Agent Runtime / LM Studio 等）通过标准 MCP 协议调用酒店工具。
+端侧酒店私域运营 Agent 的**自建 Java MCP Server**（独立打包、双传输：stdio + Streamable HTTP）。
+对齐落地方案 §4.3 工具清单，供任意 MCP 客户端（Claude Desktop / 自建 Agent Runtime / 自研程序直连等）通过标准 MCP 协议调用酒店工具。
 
 ## 一、构建
 
@@ -10,21 +10,19 @@ $env:JAVA_HOME = "D:\jdk\jdk-17.0.12"
 & "D:\Program Files (x86)\apache-maven-3.9.9\bin\mvn.cmd" -f pom.xml package
 ```
 
-产物：`target/edgehotel-mcp-server.jar`（约 5.9MB，shade 全量可执行 jar）。
-依赖：MCP Java SDK 0.17.2（`io.modelcontextprotocol.sdk:mcp`，BOM 管理）。
+产物：`target/edgehotel-mcp-server.jar`（约 8.9MB，shade 全量可执行 jar）。
+依赖：MCP Java SDK 0.17.2（`io.modelcontextprotocol.sdk:mcp`，BOM 管理）+ Jetty 12（EE10，Streamable HTTP 承载）。
 
-## 二、MCP 客户端接入
+## 二、启动方式（双传输）
 
-在 MCP 客户端中注册 stdio 服务器（Windows 注意编码参数）：
+| 模式 | 命令 | 适用场景 |
+|---|---|---|
+| stdio（默认） | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar` | 标准 MCP 客户端（Claude Desktop / Agent Runtime）拉起进程 |
+| Streamable HTTP | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http [端口]` | 跨进程/远程调用；默认端口 **8601**，端点 `http://localhost:8601/mcp` |
 
-| 字段 | 值 |
-|---|---|
-| command | `java` |
-| args | `-Dfile.encoding=UTF-8`、`-jar`、`D:\AI\edgehotel-agent\mcp-server\target\edgehotel-mcp-server.jar` |
+> Windows 下必须带 `-Dfile.encoding=UTF-8`，否则 stdin/stdout 中文乱码（JDK 默认系统代码页）。
 
-> Windows 下若不指定 `-Dfile.encoding=UTF-8`，stdin/stdout 中文会乱码（JDK 默认系统代码页）。
-
-Claude Desktop 示例（`claude_desktop_config.json`）：
+### stdio 客户端接入（Claude Desktop 示例，`claude_desktop_config.json`）
 
 ```json
 {
@@ -36,6 +34,20 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
   }
 }
 ```
+
+### HTTP 接入（自研程序 / 远程调用）
+
+```
+POST http://localhost:8601/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"my-client","version":"1.0"}}}
+```
+
+- initialize 响应头 `Mcp-Session-Id` 需带回后续请求（`Mcp-Session-Id: <sid>`）。
+- 请求体即 MCP JSON-RPC（`tools/list` / `tools/call`），示例见 `scripts/mcp-smoke-http.py`。
+- 端口 8601 对齐 ITGG 端口规划（EdgeHotel 系 86xx 段）。
 
 ## 三、工具清单（对齐落地方案 §4.3）
 
@@ -57,14 +69,22 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
 
 ## 五、验证
 
-一键冒烟（MCP 协议 JSON-RPC over stdio：initialize → tools/list → 7 次 tools/call）：
+一键冒烟（stdio：MCP 协议 JSON-RPC over stdio：initialize → tools/list → 7 次 tools/call）：
 
 ```powershell
 python scripts\mcp-smoke.py target\edgehotel-mcp-server.jar
 ```
 
-实测记录（2026-10-29）：**9/9 PASS** —— 握手、6 工具枚举、房态/未知日期防幻觉/价格/订单/会员脱敏/投诉工单/话术草稿全部通过。
-已修复：`booking` 结果 Map 重复 key（`status`×2 → `orderStatus`）；价格早餐字段恒 false 判断（`"含早餐".equals(...)` → 整数比较）。
+HTTP 冒烟（先启动 `--http 8601`，再跑）：
+
+```powershell
+python scripts\mcp-smoke-http.py
+```
+
+实测记录（2026-10-29）：
+- **stdio 9/9 PASS** —— 握手、6 工具枚举、房态/未知日期防幻觉/价格/订单/会员脱敏/投诉工单/话术草稿全部通过。
+- **HTTP 8/8 PASS** —— initialize（Mcp-Session-Id 会话）+ tools/list + 6 工具调用全部通过，中文/脱敏/留痕正常。
+- 已修复：`booking` 结果 Map 重复 key（`status`×2 → `orderStatus`）；价格早餐字段恒 false 判断（`"含早餐".equals(...)` → 整数比较）。
 
 ## 六、治理对齐（ITGG 红线）
 
