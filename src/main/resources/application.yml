@@ -38,6 +38,13 @@ app:
     enabled: ${EH_MCP_ENABLED:false}
     base-url: ${EH_MCP_URL:http://localhost:8601/mcp}
     sensitive-tools: "${EH_MCP_SENSITIVE:}"
+
+channel:
+  # 私域渠道接入（M4）：通用 Webhook 入口 POST /api/channel/webhook
+  # enabled=true 必须配 secret（echo 本地联调除外）；echo=true 为回环测试模式（不调模型）
+  enabled: ${EH_CHANNEL_ENABLED:false}
+  secret: ${EH_CHANNEL_SECRET:}
+  echo: ${EH_CHANNEL_ECHO:false}
   # SQLite 库路径（每商家独立库 = 租户隔离；Docker 挂载卷到 data/）
   db-path: ${EH_DB_PATH:data/edgehotel.db}
 

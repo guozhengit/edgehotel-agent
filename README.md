@@ -81,6 +81,19 @@ $env:JAVA_HOME='D:\jdk\jdk-17.0.12'
 - 写类工具（投诉/话术）按排除名单保留在运行时（审批门 + SQLite tickets 落库）
 - 会话失效（server 重启）自动重初始化重试一次
 
+## 私域渠道接入（M4）
+
+通用 Webhook 入口 `POST /api/channel/webhook`：平台回调 → HMAC 验签（±5min 防重放）→ peer→确定性会话映射 → AgentRunner 同链路编排 → 文本回复。
+
+```powershell
+# 回环测试模式（不调模型，验证渠道全链路）
+$env:EH_CHANNEL_ENABLED='true'; $env:EH_CHANNEL_ECHO='true'; $env:EH_CHANNEL_SECRET='test-secret-123'
+# 真实模式（LLM 编排）：EH_CHANNEL_ECHO 不设或 false
+```
+请求头 `X-EdgeHotel-Timestamp` + `X-EdgeHotel-Signature`（HMAC-SHA256(secret, "{ts}.{rawBody}")）；载荷 `{peer, text, externalSessionId?}`（externalSessionId 细分同用户并发会话）。渠道关闭时端点 404 不暴露存在性。实测（2026-10-30）：回环 4/4 PASS（对签名/错签名/重放/缺参）。
+
+平台专有适配（飞书/企业微信回调加解密）：官方 `agentscope-extensions-channel-{feishu,weixin,dingtalk,wecom}` 已在本地仓库就位，待平台凭据接入（后续增量）。
+
 ## Docker 部署
 
 ```powershell
