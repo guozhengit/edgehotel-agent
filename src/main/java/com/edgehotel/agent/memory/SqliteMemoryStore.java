@@ -32,8 +32,17 @@ public class SqliteMemoryStore implements MemoryStore {
 
     @Override
     public long add(MemoryItem item) {
-        float[] vec = embedding.embed(item.content());
-        byte[] blob = toBytes(vec);
+        // 优雅降级：embedding 模型不可用时仍落库（embedding=NULL），内容不丢；
+        // recall 跳过 NULL 向量行，模型恢复后重新 add 即可补向量
+        float[] vec;
+        try {
+            vec = embedding.embed(item.content());
+        } catch (Exception e) {
+            vec = null;
+            org.slf4j.LoggerFactory.getLogger(SqliteMemoryStore.class)
+                    .warn("记忆 embedding 失败（内容仍落库，向量待补）: {}", e.getMessage());
+        }
+        byte[] blob = vec == null ? null : toBytes(vec);
         try (Connection c = db.open();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO memories(scope_type,scope_id,content,embedding,source_step,ts) VALUES(?,?,?,?,?,?)",
@@ -46,6 +55,11 @@ public class SqliteMemoryStore implements MemoryStore {
             ps.setString(6, item.ts() == null
                     ? LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                     : item.ts());
+            if (blob == null) {
+                ps.setNull(4, java.sql.Types.BLOB);
+            } else {
+                ps.setBytes(4, blob);
+            }
             ps.executeUpdate();
             ResultSet keys = ps.getGeneratedKeys();
             return keys.next() ? keys.getLong(1) : -1;
@@ -56,7 +70,14 @@ public class SqliteMemoryStore implements MemoryStore {
 
     @Override
     public List<MemoryItem> recall(String scopeType, String scopeId, String query, int topK) {
-        float[] q = embedding.embed(query);
+        float[] q;
+        try {
+            q = embedding.embed(query);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(SqliteMemoryStore.class)
+                    .warn("记忆检索 embedding 失败，返回空结果（不阻断调用方）: {}", e.getMessage());
+            return List.of();
+        }
         List<Scored> scored = new ArrayList<>();
         try (Connection c = db.open();
              PreparedStatement ps = c.prepareStatement(
@@ -67,7 +88,10 @@ public class SqliteMemoryStore implements MemoryStore {
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 String content = rs.getString(1);
-                float[] v = fromBytes(rs.getBytes(2));
+                float[] v = fromBytes(rs.getBytes(2)); // NULL 向量行（降级落库）跳过
+                if (v == null) {
+                    continue;
+                }
                 scored.add(new Scored(content, rs.getString(3), rs.getString(4), cosine(q, v)));
             }
         } catch (java.sql.SQLException e) {

@@ -41,6 +41,9 @@ app:
   workspace: ${EH_WORKSPACE:.agentscope/workspace}
   # 运行时守卫（每 5 分钟复检内存/引擎数/模型加载态，漂移告警）：on（默认）| off
   runtime-guard: ${EH_RUNTIME_GUARD:on}
+  # 治理端点门禁（M6 安全加固）：审批放行/拒绝与记忆写入的 Bearer Key；
+  # 未配置=关闭（本机联调，启动 WARN）；非本机部署强烈建议配置
+  ops-key: ${EH_OPS_KEY:}
   # MCP 数据源模式：true 时读类工具桥接 edgehotel-mcp-server（EH_MCP_URL 指向 8601 /mcp），
   # 数据源（demo/外置JSON/aurora 真实PMS）由 MCP server 侧决定；写类工具仍走运行时（审批+落库）
   mcp:
