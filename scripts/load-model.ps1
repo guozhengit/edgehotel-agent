@@ -26,6 +26,7 @@ if ($engines -ge 2) {
 switch ($Model) {
     "qwen3.5-9b"   { $id = "qwen/qwen3.5-9b"; $extra = @("--context-length", "8192", "--gpu", "0.85") }  # 0.85/0.75/max 实测均受 VLM vision 塔常驻限制（详见治理文档 §3.1）
     "embedding"    { $id = "text-embedding-qwen__qwen3-embedding-0.6b"; $extra = @("--gpu", "max") }
+    "0.5b"         { $id = "qwen2.5-0.5b-instruct"; $extra = @("--context-length", "4096", "--gpu", "max") }
     "30b-a3b"      { $id = "qwen3-30b-a3b"; $extra = @("--context-length", "8192", "--gpu", "0.3") }
     "gemma"        { $id = "google/gemma-4-e4b"; $extra = @("--context-length", "8192", "--gpu", "max") }
     default        { Write-Host "[load] 未知模型别名: $Model" -ForegroundColor Red; exit 1 }
