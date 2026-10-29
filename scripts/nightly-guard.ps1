@@ -16,6 +16,10 @@ $fail = 0
 powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build.ps1")
 if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] 构建防线 FAIL" -ForegroundColor Red }
 
+# 1.5) 单元测试（13 项：签名/频控/餐饮数据契约——零模型依赖）
+& mvn -B test 2>&1 | Select-String -Pattern "Tests run:.*Failures"
+if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] 单元测试 FAIL" -ForegroundColor Red }
+
 # 2) MCP stdio 冒烟（9 项）
 python (Join-Path $root "mcp-server\scripts\mcp-smoke.py")
 if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] MCP stdio 冒烟 FAIL" -ForegroundColor Red }

@@ -30,7 +30,11 @@ public final class WebhookSignature {
     }
 
     public static boolean safeEquals(String a, String b) {
-        return a != null && b != null && MessageDigest.isEqual(
+        // 空白串恒不匹配：上游 bug 传空签名时不得通过（纵深防御）
+        if (a == null || b == null || a.isBlank() || b.isBlank()) {
+            return false;
+        }
+        return MessageDigest.isEqual(
                 a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     }
 }
