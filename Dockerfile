@@ -10,12 +10,16 @@
 # 新商家接入 = 一条 docker run（或 compose up），配置全部环境变量化（见 examples/hotel-onboard.md）。
 
 # ---- 构建阶段 ----
+# io.agentscope:2.0.4-SNAPSHOT 不在 Maven Central（宿主机源码仓 install），经 m2-vendor/ 离线解析
+# （scripts/sync-m2-vendor.py 维护；agentscope 发中央仓库正式版后可移除 vendor）
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /build
+COPY docker/mvn-settings.xml ./settings.xml
+COPY m2-vendor ./m2-vendor
 COPY pom.xml .
-RUN mvn -q -B dependency:go-offline
+RUN mvn -q -B -s settings.xml dependency:go-offline
 COPY src ./src
-RUN mvn -q -B package -DskipTests
+RUN mvn -q -B -s settings.xml package -DskipTests
 
 # ---- 运行阶段 ----
 FROM eclipse-temurin:17-jre

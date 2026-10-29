@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Docker 构建专用 Maven settings：io.agentscope SNAPSHOT 从仓库内 vendor 目录解析（离线），
+     其余依赖照常走 Maven Central。由 scripts/sync-m2-vendor.py 生成/维护 vendor 内容。 -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <profiles>
+    <profile>
+      <id>edgehotel-vendor</id>
+      <repositories>
+        <repository>
+          <id>m2-vendor</id>
+          <url>file:///build/m2-vendor</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots>
+            <enabled>true</enabled>
+            <updatePolicy>never</updatePolicy>
+            <checksumPolicy>warn</checksumPolicy>
+          </snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>m2-vendor-plugins</id>
+          <url>file:///build/m2-vendor</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>edgehotel-vendor</activeProfile>
+  </activeProfiles>
+</settings>
