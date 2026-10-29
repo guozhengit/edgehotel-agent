@@ -25,6 +25,9 @@ complaint:
   base-url: ${EH_LLM_BASE_URL:http://localhost:1234/v1}
 
 app:
+  # 行业模板切换（M3 后 Runtime 复用性验证）：hotel（默认）| restaurant
+  # 一个模板 = 一套 Tool Bean（条件装配）+ 一份 system prompt（TemplateDescriptor）
+  template: ${EH_TEMPLATE:hotel}
   # SQLite 库路径（每商家独立库 = 租户隔离；Docker 挂载卷到 data/）
   db-path: ${EH_DB_PATH:data/edgehotel.db}
 

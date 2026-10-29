@@ -1,5 +1,6 @@
 package com.edgehotel.agent.agent;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -7,6 +8,7 @@ import java.util.Map;
 
 /** 工具 3/3：查订单状态。参数：order_id 或 phone（手机号后4位）。 */
 @Component
+@ConditionalOnProperty(name = "app.template", havingValue = "hotel", matchIfMissing = true)
 public class HotelBookingTool implements Tool {
 
     private final Map<String, Object> schema;

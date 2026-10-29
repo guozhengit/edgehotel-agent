@@ -28,17 +28,17 @@ public interface Tool {
     record ToolContext(String userId, String sessionId) {
     }
 
-    /** 统一返回：ok=true 正常；status 用 STANDARD/EMPTY/ERROR 区分（供 Verifier 判定静默失败） */
+    /** 统一返回：ok=true 正常；status 用 STANDARD/EMPTY/ERROR 区分（供 Verifier 判定静默失败）。工厂方法公开——行业模板在外部包（如 restaurant）同样构造。 */
     record ToolResult(boolean ok, String status, String output, String error) {
-        static ToolResult standard(String output) {
+        public static ToolResult standard(String output) {
             return new ToolResult(true, "STANDARD", output, null);
         }
 
-        static ToolResult empty() {
+        public static ToolResult empty() {
             return new ToolResult(true, "EMPTY", "（查询无结果）", null);
         }
 
-        static ToolResult error(String msg) {
+        public static ToolResult error(String msg) {
             return new ToolResult(false, "ERROR", null, msg);
         }
     }

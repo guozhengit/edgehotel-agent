@@ -1,5 +1,6 @@
 package com.edgehotel.agent.agent;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.UUID;
  * 演示数据全部标注"示例"；真实接入 PMS/值班表在 M2。
  */
 @Component
+@ConditionalOnProperty(name = "app.template", havingValue = "hotel", matchIfMissing = true)
 public class ComplaintEscalateTool implements Tool {
 
     @Override

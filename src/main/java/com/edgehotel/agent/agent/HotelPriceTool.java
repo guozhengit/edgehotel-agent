@@ -1,5 +1,6 @@
 package com.edgehotel.agent.agent;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -8,6 +9,7 @@ import java.util.Map;
 
 /** 工具 2/3：查房价。参数：room_type（standard/deluxe/suite）、date。 */
 @Component
+@ConditionalOnProperty(name = "app.template", havingValue = "hotel", matchIfMissing = true)
 public class HotelPriceTool implements Tool {
 
     private final Map<String, Object> schema;

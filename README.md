@@ -60,6 +60,18 @@ $env:JAVA_HOME='D:\jdk\jdk-17.0.12'
 | `GET /api/verifier/ledger` | 静默失败台账 |
 | `GET /api/eval/cases` | 回归用例集（失败轨迹自动入库） |
 | `POST /api/memory/add`、`GET /api/memory/recall` | 跨会话记忆写入 / 向量召回 |
+| `GET /api/agent/tools` | 当前模板工具集检视（模板切换的结构验证入口） |
+
+## 行业模板（Runtime 复用性）
+
+一个模板 = 一套 `Tool` Bean（`@ConditionalOnProperty` 条件装配）+ 一份 `TemplateDescriptor`（system prompt）。Runtime（AgentRunner / ApprovalGate / Verifier / Memory / eval）对模板零感知。
+
+| 模板 | 启动 | 工具集 |
+|---|---|---|
+| `hotel`（默认） | 不带参数 | 房态 / 价格 / 订单 + 投诉升级、话术生成（2 敏感） |
+| `restaurant` | `EH_TEMPLATE=restaurant` | 桌态 / 菜单价格 / 订单 / 会员脱敏 + 客诉升级、营销话术（2 敏感） |
+
+新行业模板 = 在自己的包里实现 `Tool`（`ToolResult.standard/empty/error` 公开工厂）+ 一个 `TemplateDescriptor`，**不改任何 Runtime 代码**。验证：`GET /api/agent/tools` 检视（2026-10-30 实测双模板切换零泄漏，hotel 5 工具 / restaurant 6 工具）。
 
 ## 新商家接入（< 1 天）
 

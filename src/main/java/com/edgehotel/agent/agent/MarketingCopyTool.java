@@ -1,5 +1,6 @@
 package com.edgehotel.agent.agent;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -12,6 +13,7 @@ import java.util.Map;
  * 输出为话术草稿（示例模板 + 客人上下文），M2 接消息通道后走审批后发送。
  */
 @Component
+@ConditionalOnProperty(name = "app.template", havingValue = "hotel", matchIfMissing = true)
 public class MarketingCopyTool implements Tool {
 
     private final Map<String, Object> schema;
