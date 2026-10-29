@@ -13,14 +13,26 @@ $env:JAVA_HOME = "D:\jdk\jdk-17.0.12"
 产物：`target/edgehotel-mcp-server.jar`（约 8.9MB，shade 全量可执行 jar）。
 依赖：MCP Java SDK 0.17.2（`io.modelcontextprotocol.sdk:mcp`，BOM 管理）+ Jetty 12（EE10，Streamable HTTP 承载）。
 
-## 二、启动方式（双传输）
+## 二、启动方式（双传输 + 双数据源）
 
 | 模式 | 命令 | 适用场景 |
 |---|---|---|
-| stdio（默认） | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar` | 标准 MCP 客户端（Claude Desktop / Agent Runtime）拉起进程 |
-| Streamable HTTP | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http [端口]` | 跨进程/远程调用；默认端口 **8601**，端点 `http://localhost:8601/mcp` |
+| stdio（默认） | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar [--pms demo\|aurora]` | 标准 MCP 客户端（Claude Desktop / Agent Runtime）拉起进程 |
+| Streamable HTTP | `java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http [端口] [--pms demo\|aurora] [--pms-url <base>]` | 跨进程/远程调用；默认端口 **8601**，端点 `http://localhost:8601/mcp` |
 
 > Windows 下必须带 `-Dfile.encoding=UTF-8`，否则 stdin/stdout 中文乱码（JDK 默认系统代码页）。
+
+### 数据源（MCP Bridge）
+
+| 模式 | 参数 | 说明 |
+|---|---|---|
+| demo（默认） | `--pms demo` | 内置示例数据（房态 3 天×3 房型 / 订单 2 条 / 会员 2 条），离线联调用 |
+| **真实 PMS（aurora）** | `--pms aurora --pms-url http://localhost:8100` | 桥接 aurora 酒店微服务：房态 inventory:8103 / 价格 product:8102 / 订单 order:8104 / 会员 member:8108（网关 8100 或服务直连） |
+
+**桥接红线**：
+- 输出脱敏：订单不返回 `guestMobile`；会员不返回 `idCard/phone/wxOpenid`（对齐落地方案数据合规）。
+- 服务不可达 → 返回 `PMS_UNAVAILABLE`（如实告知"暂时查不到，请稍后再试或转人工"，杜绝编造，对齐静默失败防线）。
+- 写工具（投诉/话术）由调用方审批门拦截，本 Server 仅提供语义与执行。
 
 ### stdio 客户端接入（Claude Desktop 示例，`claude_desktop_config.json`）
 
@@ -29,7 +41,7 @@ $env:JAVA_HOME = "D:\jdk\jdk-17.0.12"
   "mcpServers": {
     "edgehotel": {
       "command": "java",
-      "args": ["-Dfile.encoding=UTF-8", "-jar", "D:\\AI\\edgehotel-agent\\mcp-server\\target\\edgehotel-mcp-server.jar"]
+      "args": ["-Dfile.encoding=UTF-8", "-jar", "D:\\AI\\edgehotel-agent\\mcp-server\\target\\edgehotel-mcp-server.jar", "--pms", "aurora", "--pms-url", "http://localhost:8100"]
     }
   }
 }
@@ -81,10 +93,19 @@ HTTP 冒烟（先启动 `--http 8601`，再跑）：
 python scripts\mcp-smoke-http.py
 ```
 
+aurora 真实 PMS 离线降级冒烟（aurora 服务未启动时跑，验证如实降级不编造）：
+
+```powershell
+# 先启动：java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http 8601 --pms aurora
+python scripts\mcp-smoke-aurora-offline.py
+```
+
 实测记录（2026-10-29）：
-- **stdio 9/9 PASS** —— 握手、6 工具枚举、房态/未知日期防幻觉/价格/订单/会员脱敏/投诉工单/话术草稿全部通过。
-- **HTTP 8/8 PASS** —— initialize（Mcp-Session-Id 会话）+ tools/list + 6 工具调用全部通过，中文/脱敏/留痕正常。
-- 已修复：`booking` 结果 Map 重复 key（`status`×2 → `orderStatus`）；价格早餐字段恒 false 判断（`"含早餐".equals(...)` → 整数比较）。
+- **stdio demo 9/9 PASS** —— 握手、6 工具枚举、房态/未知日期防幻觉/价格/订单/会员脱敏/投诉工单/话术草稿全部通过。
+- **HTTP demo 8/8 PASS** —— initialize（Mcp-Session-Id 会话）+ tools/list + 6 工具调用全部通过。
+- **aurora 离线降级 4/4 PASS** —— 4 读工具在 PMS 不可达时均返回 `PMS_UNAVAILABLE` + 如实文案（不编造）。
+- 已修复：`booking` 结果 Map 重复 key；价格早餐字段恒 false；启动日志曾污染 stdio stdout（改走 stderr）。
+- 待实弹：aurora 服务启动后 `--pms aurora` 直连真实数据联调（端点/字段已按源码核对）。
 
 ## 六、治理对齐（ITGG 红线）
 

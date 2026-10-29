@@ -7,7 +7,7 @@ import java.util.Map;
  * 商家示例数据（HotelOps Template）：房态/价格/订单/会员。
  * 独立部署时替换为商家自己的数据源（DB/JSON 文件）。
  */
-public class HotelData {
+public class HotelData implements McpServerMain.PmsDataSource {
 
     /** 房态表：date -> room_type -> 可订数。示例数据。 */
     private final Map<String, Map<String, Integer>> inventory = new LinkedHashMap<>();

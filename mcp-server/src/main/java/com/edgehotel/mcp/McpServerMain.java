@@ -28,39 +28,92 @@ import java.util.function.BiFunction;
  *   <li>Streamable HTTP：`java -jar edgehotel-mcp-server.jar --http [端口]`（默认 8601，路径 /mcp）</li>
  * </ul>
  *
+ * <p>数据源（MCP Bridge）：
+ * <ul>
+ *   <li>`--pms demo`（默认）：内置示例数据（HotelData）</li>
+ *   <li>`--pms aurora [--pms-url http://localhost:8100]`：桥接真实 aurora 酒店微服务
+ *       （inventory 8103 房态 / product 8102 价格 / order 8104 订单 / member 8108 会员，脱敏输出）</li>
+ * </ul>
+ *
  * <p>对齐落地方案 §4.3 工具清单：读 3（房态/房价/订单）+ 写 2（投诉升级/话术生成）+ 会员脱敏查询。
  * 敏感写工具由调用方（Agent Runtime / 审批门）拦截；本 Server 仅提供工具语义与执行。
  */
 public class McpServerMain {
 
+    /** 数据源统一接口：demo（示例）与 aurora（真实 PMS）均实现四读能力。 */
+    public interface PmsDataSource {
+        Map<String, String> roomStatus(String dateOrSku, String roomTypeOrNull);
+
+        Map<String, String> price(String skuOrRoomType);
+
+        Map<String, String> booking(String orderNo);
+
+        Map<String, String> member(String memberNo);
+    }
+
     public static void main(String[] args) throws Exception {
-        HotelData data = new HotelData();
         McpJsonMapper mapper = ServiceLoader.load(McpJsonMapperSupplier.class).findFirst()
                 .orElseThrow(() -> new IllegalStateException("未找到 McpJsonMapper SPI 实现（需 mcp-json 依赖）"))
                 .get();
 
-        boolean httpMode = args.length > 0 && "--http".equals(args[0]);
-        if (httpMode) {
-            int port = args.length > 1 ? Integer.parseInt(args[1]) : 8601;
-            startHttp(data, mapper, port);
+        // 参数解析：传输模式 + 数据源
+        boolean httpMode = false;
+        int port = 8601;
+        String pmsMode = "demo";
+        String pmsUrl = "http://localhost:8100";
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--http" -> {
+                    httpMode = true;
+                    if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                        port = Integer.parseInt(args[++i]);
+                    }
+                }
+                case "--pms" -> {
+                    if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                        pmsMode = args[++i];
+                    }
+                }
+                case "--pms-url" -> {
+                    if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                        pmsUrl = args[++i];
+                    }
+                }
+                default -> {
+                    // 忽略未知参数
+                }
+            }
+        }
+
+        PmsDataSource dataSource;
+        if ("aurora".equalsIgnoreCase(pmsMode)) {
+            dataSource = new AuroraPmsClient(pmsUrl, mapper);
+            System.err.println("[edgehotel-mcp] 数据源: aurora 真实 PMS @ " + pmsUrl);
         } else {
-            startStdio(data, mapper);
+            dataSource = new HotelData();
+            System.err.println("[edgehotel-mcp] 数据源: demo 示例数据（--pms aurora 切换真实 PMS）");
+        }
+
+        if (httpMode) {
+            startHttp(dataSource, mapper, port);
+        } else {
+            startStdio(dataSource, mapper);
         }
     }
 
     /** stdio 传输（默认）。build() 即启动会话循环；stdin EOF 自然退出。 */
-    private static void startStdio(HotelData data, McpJsonMapper mapper) throws Exception {
+    private static void startStdio(PmsDataSource dataSource, McpJsonMapper mapper) throws Exception {
         McpSyncServer server = McpServer.sync(new StdioServerTransportProvider(mapper))
                 .serverInfo("edgehotel-mcp", "0.1.0")
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
-                .tools(tools(data))
+                .tools(tools(dataSource))
                 .build();
         Runtime.getRuntime().addShutdownHook(new Thread(server::close));
         new CountDownLatch(1).await();
     }
 
     /** Streamable HTTP 传输（--http [port]，默认 8601，路径 /mcp）。 */
-    private static void startHttp(HotelData data, McpJsonMapper mapper, int port) throws Exception {
+    private static void startHttp(PmsDataSource dataSource, McpJsonMapper mapper, int port) throws Exception {
         HttpServletStreamableServerTransportProvider provider =
                 HttpServletStreamableServerTransportProvider.builder()
                         .jsonMapper(mapper)
@@ -69,7 +122,7 @@ public class McpServerMain {
         McpSyncServer server = McpServer.sync(provider)
                 .serverInfo("edgehotel-mcp", "0.1.0")
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
-                .tools(tools(data))
+                .tools(tools(dataSource))
                 .build();
 
         Server jetty = new Server(port);
@@ -78,7 +131,7 @@ public class McpServerMain {
         ctx.addServlet(new ServletHolder(provider), "/mcp");
         jetty.setHandler(ctx);
         jetty.start();
-        System.out.println("edgehotel-mcp-server (HTTP) listening on http://localhost:" + port + "/mcp");
+        System.err.println("[edgehotel-mcp] (HTTP) listening on http://localhost:" + port + "/mcp");
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             server.close();
             try {
@@ -92,20 +145,20 @@ public class McpServerMain {
 
     // ---------- 工具注册 ----------
 
-    private static List<McpServerFeatures.SyncToolSpecification> tools(HotelData data) {
+    private static List<McpServerFeatures.SyncToolSpecification> tools(PmsDataSource dataSource) {
         return List.of(
                 toolSpec("hotel_room_status",
-                        "查询酒店指定日期与房型的可订房态。参数：date=YYYY-MM-DD，room_type=standard|deluxe|suite。示例数据仅覆盖 2026-10-30 至 2026-11-01；未知日期返回 UNKNOWN_DATE，务必如实转述，不得编造。",
-                        (exchange, a) -> ok(data.roomStatus(str(a, "date"), str(a, "room_type")))),
+                        "查询酒店指定日期与房型的可订房态。参数：date=YYYY-MM-DD，room_type=standard|deluxe|suite（demo 模式）；aurora 模式参数：skuId。未知日期/数据不可达返回 UNKNOWN_DATE/PMS_UNAVAILABLE，务必如实转述，不得编造。",
+                        (exchange, a) -> ok(dataSource.roomStatus(str(a, "date", str(a, "skuId")), str(a, "room_type")))),
                 toolSpec("hotel_price_quote",
-                        "查询酒店房型价格（含早餐信息）。参数：room_type=standard|deluxe|suite。示例数据。",
-                        (exchange, a) -> ok(data.price(str(a, "room_type")))),
+                        "查询酒店房型价格。参数：room_type=standard|deluxe|suite（demo 模式）；aurora 模式参数：skuId。",
+                        (exchange, a) -> ok(dataSource.price(str(a, "room_type", str(a, "skuId"))))),
                 toolSpec("hotel_booking_lookup",
-                        "按订单号查询订单状态。参数：order_id。示例数据仅 B20261001/B20261002。",
-                        (exchange, a) -> ok(data.booking(str(a, "order_id")))),
+                        "按订单号查询订单状态。参数：order_no（aurora 模式）/ order_id（demo 模式）。aurora 输出已脱敏（不含手机号）。",
+                        (exchange, a) -> ok(dataSource.booking(str(a, "order_no", str(a, "order_id"))))),
                 toolSpec("member_profile_query",
-                        "查询会员等级与偏好摘要（脱敏：不含手机号/证件等隐私字段）。参数：member_id。示例 M-1001/M-1002。",
-                        (exchange, a) -> ok(data.member(str(a, "member_id")))),
+                        "查询会员等级与偏好摘要（脱敏：不含手机号/证件等隐私字段）。参数：member_no（aurora）/ member_id（demo）。",
+                        (exchange, a) -> ok(dataSource.member(str(a, "member_no", str(a, "member_id"))))),
                 toolSpec("complaint_escalate",
                         "创建投诉/人工升级工单（敏感写操作，调用方须走审批门；返回工单号供留痕）。参数：guest_name、room_no、issue。",
                         (exchange, a) -> {
