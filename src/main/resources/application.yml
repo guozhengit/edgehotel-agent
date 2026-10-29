@@ -49,6 +49,14 @@ channel:
   echo: ${EH_CHANNEL_ECHO:false}
   # 频控（M6-2）：per-peer 每分钟消息上限（防滥用）；0=关闭
   rate-limit-per-minute: ${EH_CHANNEL_RATE_LIMIT:30}
+  wecom:
+    # 企业微信回调 POST|GET /api/channel/wecom/callback（加解密复用官方 WeComCrypto，XML 信封）
+    enabled: ${EH_WECOM_ENABLED:false}
+    token: ${EH_WECOM_TOKEN:}
+    encoding-aes-key: ${EH_WECOM_ENCODING_AES_KEY:}
+    receive-id: ${EH_WECOM_RECEIVE_ID:}   # 即 CorpID
+    corp-id: ${EH_WECOM_CORP_ID:}         # 出站（IM API 回复）需要；缺省 pending_credentials
+    corp-secret: ${EH_WECOM_CORP_SECRET:}
   feishu:
     # 飞书事件订阅回调 POST /api/channel/feishu/callback（加解密复用官方 FeishuCrypto）
     enabled: ${EH_FEISHU_ENABLED:false}

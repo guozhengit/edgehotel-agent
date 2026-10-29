@@ -94,7 +94,9 @@ $env:EH_CHANNEL_ENABLED='true'; $env:EH_CHANNEL_ECHO='true'; $env:EH_CHANNEL_SEC
 
 **飞书适配器** `POST /api/channel/feishu/callback`（M4 第二增量）：复用官方 `FeishuCrypto`（AES 回调解密 + SHA-256 签名校验）——URL 验证（challenge 回显）/ v2 消息事件映射（open_id 为 peer，content 内嵌 JSON 二次解析，sender_type=app 自环防护）/ 消息落库审计 / echo 回环。全部可离线自测：`java scripts/GenFeishuFixture.java <encryptKey> '<明文JSON>'` 生成加密夹具（无需平台凭据），实测 5 场景（URL 验证/消息/错签名 401/自环防护/审计落库）全过。真实回复经飞书 IM API 出站需配 `EH_FEISHU_APP_ID/APP_SECRET`（缺省状态=pending_credentials，消息可审计）。
 
-企业微信/钉钉：官方 `agentscope-extensions-channel-{wecom,dingtalk}` 同仓库就位，接入模式同飞书（后续增量）。
+**企业微信适配器** `POST|GET /api/channel/wecom/callback`（M4 收尾）：复用官方 `WeComCrypto`（SHA-1 排序签名 + AES-CBC，EncodingAESKey 43 字符）——URL 验证（回解密明文）/ XML 信封解析（MsgType=text + FromUserName=peer）/ MsgId 幂等去重 / 消息落库审计 / echo 回环。离线自测：`java scripts/GenWeComFixture.java <token> <aesKey43> <receiveId> '<XML>'`，6 场景实测全过（URL 验证/消息/错签名 401/幂等/审计/计数器）。出站经企微 IM API 需 `EH_WECOM_CORP_ID/SECRET`（缺省 pending_credentials）。
+
+钉钉：官方 `agentscope-extensions-channel-dingtalk` 同仓库就位，接入模式同飞书/企微（后续增量）。
 
 ## Docker 部署
 

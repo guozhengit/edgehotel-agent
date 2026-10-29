@@ -44,6 +44,13 @@
             <version>${agentscope.version}</version>
         </dependency>
 
+        <!-- 官方企业微信渠道扩展（M4）：复用其回调加解密（WeComCrypto），薄接入本工程渠道层 -->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-channel-wecom</artifactId>
+            <version>${agentscope.version}</version>
+        </dependency>
+
         <!-- WebFlux：响应式 HTTP 入口 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
