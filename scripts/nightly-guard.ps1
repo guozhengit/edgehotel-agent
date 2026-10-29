@@ -1,4 +1,4 @@
-﻿﻿# EdgeHotel-Agent 每日守卫（M5-6）：构建 + 双传输冒烟 + 资源体检，结果落 logs/。
+﻿# EdgeHotel-Agent 每日守卫（M5-6）：构建 + 双传输冒烟 + 资源体检，结果落 logs/。
 # 注册每日计划任务（以管理员或当前用户）：
 #   schtasks /Create /TN "EdgeHotel-NightlyGuard" /SC DAILY /ST 03:00 ^
 #     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File D:\AI\edgehotel-agent\scripts\nightly-guard.ps1"
@@ -38,7 +38,11 @@ if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] 渠道回归 FAIL" -Fore
 Stop-Process -Id $testProc.Id -Force -ErrorAction SilentlyContinue
 Remove-Item Env:EH_PORT, Env:EH_CHANNEL_ENABLED, Env:EH_CHANNEL_ECHO, Env:EH_CHANNEL_SECRET, Env:EH_FEISHU_ENABLED, Env:EH_FEISHU_ENCRYPT_KEY, Env:EH_FEISHU_VERIFICATION_TOKEN, Env:EH_WECOM_ENABLED, Env:EH_WECOM_TOKEN, Env:EH_WECOM_ENCODING_AES_KEY, Env:EH_WECOM_RECEIVE_ID, Env:EH_DINGTALK_ENABLED, Env:EH_DINGTALK_APP_SECRET -ErrorAction SilentlyContinue
 
-# 4) 资源体检
+# 4) 数据库备份（14 份保留策略见 backup-edgehotel-db.ps1）
+powershell -File (Join-Path $root "backup-edgehotel-db.ps1")
+if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "[guard] 数据库备份 FAIL" -ForegroundColor Red }
+
+# 5) 资源体检
 powershell -File "D:\AI-Models\resource-check.ps1"
 
 Stop-Transcript | Out-Null

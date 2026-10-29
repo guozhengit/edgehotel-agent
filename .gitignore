@@ -10,7 +10,10 @@ data/*.db-shm
 *.log
 *.err.log
 # AgentScope 运行时工作区（会话/记忆，属运行时产物）
-.agentscope/
+.agentscope/*
+!.agentscope/workspace/
+.agentscope/workspace/*
+!.agentscope/workspace/AGENTS.md
 # IDE
 .idea/
 *.iml
