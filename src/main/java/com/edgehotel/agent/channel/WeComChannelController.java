@@ -71,8 +71,12 @@ public class WeComChannelController {
     private final String corpId;
     private final String corpSecret;
 
-    /** MsgId 幂等集（同官方 IdempotencyStore 语义，内存版足够单机渠道层）。 */
+    /**
+     * MsgId 幂等集（同官方 IdempotencyStore 语义）。有界化：超过容量时清空重建——
+     * 幂等窗口从"永久"退化为"近期"，但换取长运行不泄漏（企微重试窗口为分钟级，容量 10000 绰绰有余）。
+     */
     private static final Set<String> recentMsgIds = ConcurrentHashMap.newKeySet();
+    private static final int MSG_ID_CAP = 10_000;
 
     public WeComChannelController(AgentRunner runner, TemplateDescriptor template,
                                   ChannelMessageStore messages, ChannelStats stats,
@@ -154,9 +158,14 @@ public class WeComChannelController {
         final String text = "text".equalsIgnoreCase(msgType) ? xmlText(xml, "Content") : null;
 
         // 幂等：同 MsgId 重复推送 200 静默（企微停止重试），同官方模式
-        if (msgId != null && !msgId.isBlank() && !recentMsgIds.add("wecom|" + msgId)) {
-            stats.inc("wecom.drop_duplicate");
-            return Mono.just(ResponseEntity.ok(""));
+        if (msgId != null && !msgId.isBlank()) {
+            if (recentMsgIds.size() >= MSG_ID_CAP) {
+                recentMsgIds.clear(); // 有界化：清空重建（见字段注释）
+            }
+            if (!recentMsgIds.add("wecom|" + msgId)) {
+                stats.inc("wecom.drop_duplicate");
+                return Mono.just(ResponseEntity.ok(""));
+            }
         }
         if (fromUser == null || fromUser.isBlank() || text == null || text.isBlank()) {
             stats.inc("wecom.drop_non_text");

@@ -20,23 +20,24 @@ public class ChannelRateLimiter {
         this.limitPerMinute = limitPerMinute;
     }
 
-    /** 允许该 peer 本分钟继续发消息？ */
+    /** 允许该 peer 本分钟继续发消息？（计数递增在 compute 内完成，保证并发原子性） */
     public boolean allow(String peer) {
         if (limitPerMinute <= 0) {
             return true;
         }
         long nowMinute = System.currentTimeMillis() / 60000;
-        Window w = windows.compute(peer, (k, old) ->
-                old == null || old.minute != nowMinute ? new Window(nowMinute) : old);
-        w.count++; // compute 原子性保证同 peer 串行
-        if (w.count > limitPerMinute) {
-            return false;
-        }
+        boolean[] allowed = {false};
+        windows.compute(peer, (k, old) -> {
+            Window w = old == null || old.minute != nowMinute ? new Window(nowMinute) : old;
+            w.count++;
+            allowed[0] = w.count <= limitPerMinute;
+            return w;
+        });
         // 懒清理：窗口表过大时移除上一分钟及更早的条目
         if (windows.size() > 1024) {
             windows.entrySet().removeIf(e -> e.getValue().minute < nowMinute);
         }
-        return true;
+        return allowed[0];
     }
 
     private static final class Window {
