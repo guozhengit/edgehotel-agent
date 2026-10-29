@@ -18,6 +18,8 @@ agent:
   model: ${EH_AGENT_MODEL:qwen3-30b-a3b}
   base-url: ${EH_LLM_BASE_URL:http://localhost:1234/v1}
   max-tool-rounds: ${EH_MAX_ROUNDS:3}
+  # 单轮推理超时（秒）：超时释放推理信号量，不再饿死后续请求（治理：LM Studio 慢/挂起防护）
+  chat-timeout-seconds: ${EH_CHAT_TIMEOUT:120}
 
 complaint:
   # 投诉识别模型（M1-2，短文本分类走 9B 快路径）
@@ -28,6 +30,14 @@ app:
   # 行业模板切换（M3 后 Runtime 复用性验证）：hotel（默认）| restaurant
   # 一个模板 = 一套 Tool Bean（条件装配）+ 一份 system prompt（TemplateDescriptor）
   template: ${EH_TEMPLATE:hotel}
+  # 启动前置检查（治理 §八）：off | warn（默认）| enforce（内存红线超限拒绝启动）
+  preflight: ${EH_PREFLIGHT:warn}
+  # MCP 数据源模式：true 时读类工具桥接 edgehotel-mcp-server（EH_MCP_URL 指向 8601 /mcp），
+  # 数据源（demo/外置JSON/aurora 真实PMS）由 MCP server 侧决定；写类工具仍走运行时（审批+落库）
+  mcp:
+    enabled: ${EH_MCP_ENABLED:false}
+    base-url: ${EH_MCP_URL:http://localhost:8601/mcp}
+    sensitive-tools: "${EH_MCP_SENSITIVE:}"
   # SQLite 库路径（每商家独立库 = 租户隔离；Docker 挂载卷到 data/）
   db-path: ${EH_DB_PATH:data/edgehotel.db}
 

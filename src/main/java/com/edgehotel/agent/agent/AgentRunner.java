@@ -31,6 +31,7 @@ public class AgentRunner {
     private final String model;
     private final ToolRegistry registry;
     private final int maxRounds;
+    private final long chatTimeoutSeconds;
     private final ToolVerifier verifier;
     private final SilentFailureLedger ledger;
     private final ApprovalGate approvalGate;
@@ -47,7 +48,8 @@ public class AgentRunner {
                        EvalCaseStore evalCaseStore,
                        @Value("${agent.model}") String model,
                        @Value("${agent.base-url}") String baseUrl,
-                       @Value("${agent.max-tool-rounds:3}") int maxRounds) {
+                       @Value("${agent.max-tool-rounds:3}") int maxRounds,
+                       @Value("${agent.chat-timeout-seconds:120}") long chatTimeoutSeconds) {
         this.registry = registry;
         this.verifier = verifier;
         this.ledger = ledger;
@@ -56,6 +58,7 @@ public class AgentRunner {
         this.evalCaseStore = evalCaseStore;
         this.model = model;
         this.maxRounds = maxRounds;
+        this.chatTimeoutSeconds = chatTimeoutSeconds;
         this.client = WebClient.builder()
                 .baseUrl(baseUrl)
                 .exchangeStrategies(ExchangeStrategies.builder()
@@ -191,11 +194,14 @@ public class AgentRunner {
             throw new IllegalStateException("推理限流被中断", e);
         }
         try {
+            // 带超时的 block：LM Studio 慢/挂起时不再无限期持有推理信号量（饿死后续请求）
             return client.post().uri("/chat/completions")
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block();
+                    .block(java.time.Duration.ofSeconds(chatTimeoutSeconds));
+        } catch (java.lang.IllegalStateException e) {
+            throw new IllegalStateException("模型推理超时(" + chatTimeoutSeconds + "s，单轮)——请稍后重试或检查 LM Studio 状态", e);
         } finally {
             inferenceLock.release();
         }

@@ -7,6 +7,7 @@ EdgeHotel MCP Server stdio 冒烟验证（MCP 协议 JSON-RPC over stdio）。
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -14,8 +15,30 @@ import time
 JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "target", "edgehotel-mcp-server.jar")
 JAR = os.path.abspath(JAR)
-JAVA = os.environ.get("JAVA_HOME", r"D:\jdk\jdk-17.0.12")
-JAVA = os.path.join(JAVA, "bin", "java.exe")
+FALLBACK_JDK17 = r"D:\jdk\jdk-17.0.12"
+
+
+def _resolve_java():
+    """优先 JAVA_HOME；但 JDK<17 跑不了本 jar（类文件版本 61），探测版本后回退默认 JDK17。"""
+    candidates = [os.environ.get("JAVA_HOME", ""), FALLBACK_JDK17]
+    for home in candidates:
+        if not home:
+            continue
+        java = os.path.join(home, "bin", "java.exe")
+        if not os.path.isfile(java):
+            continue
+        try:
+            out = subprocess.run([java, "-version"], capture_output=True, text=True, timeout=15)
+            ver = (out.stderr or "") + (out.stdout or "")
+            m = re.search(r'version "(\d+)', ver)
+            if m and int(m.group(1)) >= 17:
+                return java
+        except Exception:
+            pass
+    return os.path.join(FALLBACK_JDK17, "bin", "java.exe")
+
+
+JAVA = _resolve_java()
 
 def main():
     proc = subprocess.Popen(
