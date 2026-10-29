@@ -3,6 +3,7 @@
 #   schtasks /Create /TN "EdgeHotel-NightlyGuard" /SC DAILY /ST 03:00 ^
 #     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File D:\AI\edgehotel-agent\scripts\nightly-guard.ps1"
 $ErrorActionPreference = "Continue"
+$env:JAVA_HOME = "D:\jdk\jdk-17.0.12"   # shell 的 JAVA_HOME 可能指向 JDK8（复盘 F7）
 $root = Split-Path -Parent $PSScriptRoot
 $logDir = Join-Path $root "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
