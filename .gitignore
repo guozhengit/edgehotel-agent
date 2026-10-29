@@ -22,3 +22,4 @@ data/*.db-shm
 Thumbs.db
 .DS_Store
 mcp-server/dependency-reduced-pom.xml
+backups/

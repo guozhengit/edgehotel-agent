@@ -61,6 +61,7 @@
   <div class="tab" data-panel="complaint">投诉识别</div>
   <div class="tab" data-panel="memory">记忆</div>
   <div class="tab" data-panel="ops">运行视图</div>
+  <div class="tab" data-panel="tickets">工单</div>
 </div>
 
 <!-- 运行视图（M5-1） -->
@@ -77,6 +78,23 @@
     <h2>渠道消息审计（channel_messages）</h2>
     <div class="btn-row"><button class="ghost" id="ops-refresh">刷新</button><span class="hint">最近 100 条（channel_messages 全量）</span></div>
     <table style="margin-top:8px"><thead><tr><th>渠道</th><th>方向</th><th>peer</th><th>状态</th><th>内容</th><th>租户</th><th>时间</th></tr></thead><tbody id="ops-msgs"></tbody></table>
+  </div>
+</div>
+
+<!-- 工单（M6-1） -->
+<div class="panel" id="panel-tickets">
+  <div class="card">
+    <h2>投诉工单 / 话术草稿（tickets 表 · 租户标记）</h2>
+    <div class="btn-row">
+      <select class="form-select" id="tk-kind" style="max-width:160px">
+        <option value="">全部类型</option><option value="complaint">投诉工单</option><option value="marketing">话术草稿</option>
+      </select>
+      <select class="form-select" id="tk-status" style="max-width:160px">
+        <option value="">全部状态</option><option value="OPEN">OPEN</option><option value="DRAFT">DRAFT</option>
+      </select>
+      <button class="ghost" id="tk-refresh">刷新</button>
+    </div>
+    <table style="margin-top:8px"><thead><tr><th>类型</th><th>编号</th><th>客人</th><th>位置</th><th>内容</th><th>状态</th><th>租户</th><th>时间</th></tr></thead><tbody id="tk-body"></tbody></table>
   </div>
 </div>
 
@@ -374,6 +392,27 @@
     }).catch(function(e){ body.innerHTML='<tr><td colspan="7" class="err">加载失败：'+esc(e.message)+"</td></tr>"; });
   }
   document.getElementById("ops-refresh").addEventListener("click",loadOps);
+
+  /* ---- 工单（M6-1） ---- */
+  function loadTickets(){
+    var kind=document.getElementById("tk-kind").value;
+    var st=document.getElementById("tk-status").value;
+    var url="/api/tickets"+((kind||st)?"?"+[kind?"kind="+encodeURIComponent(kind):"",st?"status="+encodeURIComponent(st):""].filter(Boolean).join("&"):"");
+    var body=document.getElementById("tk-body");
+    body.innerHTML='<tr><td colspan="8" class="muted">加载中…</td></tr>';
+    get(url).then(function(r){
+      var items=r.tickets||[];
+      if(!items.length){ body.innerHTML='<tr><td colspan="8" class="muted">暂无工单（total='+r.total+'）</td></tr>'; return; }
+      body.innerHTML=items.map(function(t){
+        var badge=t.status==="OPEN"?'<span class="badge b-warn">OPEN</span>':(t.status==="DRAFT"?'<span class="badge b-info">DRAFT</span>':'<span class="badge b-gray">'+esc(t.status)+'</span>');
+        return '<tr><td>'+esc(t.kind)+'</td><td>'+esc(t.ref)+'</td><td>'+esc(t.guest||"-")+'</td><td>'+esc(t.location||"-")+
+          '</td><td>'+esc(t.content||"")+'</td><td>'+badge+'</td><td>'+esc(t.tenant||"-")+'</td><td class="muted">'+esc(t.ts||"-")+"</td></tr>";
+      }).join("");
+    }).catch(function(e){ body.innerHTML='<tr><td colspan="8" class="err">加载失败：'+esc(e.message)+"</td></tr>"; });
+  }
+  document.getElementById("tk-refresh").addEventListener("click",loadTickets);
+  document.getElementById("tk-kind").addEventListener("change",loadTickets);
+  document.getElementById("tk-status").addEventListener("change",loadTickets);
 
   /* 初始加载 */
   loadApprovals();
