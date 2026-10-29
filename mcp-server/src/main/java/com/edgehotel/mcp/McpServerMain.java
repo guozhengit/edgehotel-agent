@@ -60,7 +60,8 @@ public class McpServerMain {
         boolean httpMode = false;
         int port = 8601;
         String pmsMode = "demo";
-        String pmsUrl = "http://localhost:8100";
+        String pmsUrl = "http://localhost";
+        String tenant = "1";
         String dataJson = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -80,6 +81,11 @@ public class McpServerMain {
                         pmsUrl = args[++i];
                     }
                 }
+                case "--pms-tenant" -> {
+                    if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                        tenant = args[++i];
+                    }
+                }
                 case "--data" -> {
                     if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
                         dataJson = args[++i];
@@ -93,8 +99,8 @@ public class McpServerMain {
 
         PmsDataSource dataSource;
         if ("aurora".equalsIgnoreCase(pmsMode)) {
-            dataSource = new AuroraPmsClient(pmsUrl, mapper);
-            System.err.println("[edgehotel-mcp] 数据源: aurora 真实 PMS @ " + pmsUrl);
+            dataSource = new AuroraPmsClient(pmsUrl, tenant, mapper);
+            System.err.println("[edgehotel-mcp] 数据源: aurora 真实 PMS @ " + pmsUrl + " (租户 X-Merchant-Id=" + tenant + ")");
         } else {
             dataSource = dataJson != null
                     ? new HotelData(java.nio.file.Path.of(dataJson), mapper)

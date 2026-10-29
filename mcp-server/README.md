@@ -28,7 +28,9 @@ $env:JAVA_HOME = "D:\jdk\jdk-17.0.12"
 |---|---|---|
 | demo（默认） | `--pms demo` | 内置示例数据（房态 3 天×3 房型 / 订单 2 条 / 会员 2 条），离线联调用 |
 | demo + 外置 JSON | `--pms demo --data data\hotel-data.json` | 从 JSON 文件加载示例数据（换真实商家数据**不动代码**，改 JSON 即可）。结构见 `data/hotel-data.json` 注释 |
-| **真实 PMS（aurora）** | `--pms aurora --pms-url http://localhost:8100` | 桥接 aurora 酒店微服务：房态 inventory:8103 / 价格 product:8102 / 订单 order:8104 / 会员 member:8108（网关 8100 或服务直连） |
+| **真实 PMS（aurora）** | `--pms aurora --pms-url http://localhost --pms-tenant 1` | 桥接 aurora 酒店微服务：`--pms-url` 传 **host 前缀**（无端口）自动路由 房态 inventory:8103 / 价格 product:8102 / 订单 order:8104 / 会员 member:8108；传完整 URL（如网关 :8100）则四查询共用该 base。`--pms-tenant` 为租户 ID（默认 1），请求带 `X-Merchant-Id` 头（aurora 多租户：无租户上下文业务查询直接 500） |
+
+**联调实证（2026-10-29，aurora 服务在线）**：直连业务端点必须带 `X-Merchant-Id` 租户头；订单端点返回 OrderMain（含 guestMobile）；会员端点返回**服务端脱敏视图**（phoneMasked/idCardMasked，无明文）。
 
 **桥接红线**：
 - 输出脱敏：订单不返回 `guestMobile`；会员不返回 `idCard/phone/wxOpenid`（对齐落地方案数据合规）。
@@ -94,11 +96,11 @@ HTTP 冒烟（先启动 `--http 8601`，再跑）：
 python scripts\mcp-smoke-http.py
 ```
 
-aurora 真实 PMS 离线降级冒烟（aurora 服务未启动时跑，验证如实降级不编造）：
+aurora 真实 PMS 联调冒烟（aurora 服务在线时跑；离线时可先跑离线降级版）：
 
 ```powershell
-# 先启动：java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http 8601 --pms aurora
-python scripts\mcp-smoke-aurora-offline.py
+# 先启动：java -Dfile.encoding=UTF-8 -jar target\edgehotel-mcp-server.jar --http 8601 --pms aurora --pms-url http://localhost --pms-tenant 1
+python scripts\mcp-smoke-aurora-live.py
 ```
 
 实测记录（2026-10-29）：
@@ -106,8 +108,9 @@ python scripts\mcp-smoke-aurora-offline.py
 - **HTTP demo 8/8 PASS** —— initialize（Mcp-Session-Id 会话）+ tools/list + 6 工具调用全部通过。
 - **aurora 离线降级 4/4 PASS** —— 4 读工具在 PMS 不可达时均返回 `PMS_UNAVAILABLE` + 如实文案（不编造）。
 - **外置 JSON 5/5 PASS** —— `--data` 加载自定义数据（新日期/新价格/新订单/新会员）全部生效，换数据不动代码。
-- 已修复：`booking` 结果 Map 重复 key；价格早餐字段恒 false；启动日志曾污染 stdio stdout（改走 stderr）。
-- 待实弹：aurora 服务启动后 `--pms aurora` 直连真实数据联调（端点/字段已按源码核对）。
+- **aurora 真实 PMS 联调 8/8 PASS** —— 真实数据全通：库存 sku1=20 / 价格 sku1 Superior King Room 1299 / 订单 ORD202610031157216C19C825（COMPLETED）脱敏无明文手机 / 会员 M100001（Demo Guest）服务端掩码视图 / 不存在会员如实 NOT_FOUND。
+- 已修复：`booking` 结果 Map 重复 key；价格早餐字段恒 false；启动日志曾污染 stdio stdout（改走 stderr）；直连缺租户头 500（加 `X-Merchant-Id`）；member 空对象返回 null 编造（改 NOT_FOUND 如实降级）。
+- 遗留：会员端点返回服务端脱敏视图（无明文）与 C 端"只能查自己"约束由 aurora 侧实现，MCP 侧仅透出掩码字段。
 
 ## 六、治理对齐（ITGG 红线）
 
