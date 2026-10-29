@@ -24,14 +24,30 @@ def main():
     t0 = time.time()
 
     # 1. 场景集（含历史失败轨迹对应场景：未知日期房态为代表性静默失败用例）
-    scenes = [
-        ("房态正常", "明天晚上还有标准间吗？"),
-        ("价格正常", "10月31号的豪华房多少钱？"),
-        ("未知日期-回归", "11月8号晚上有套房吗？"),   # 历史 eval_case：hotel_room_status empty_result
-        ("投诉升级-回归", "房间太吵了我要投诉，帮我升级人工"),
-        ("话术生成-回归", "帮王先生生成一条离店关怀话术"),
-        ("订单查询", "帮我查一下订单 B20261001"),
-    ]
+    # --template restaurant：餐饮模板场景集（与 examples 对齐，工具名/数据均不同）
+    template = "hotel"
+    if "--template" in sys.argv:
+        template = sys.argv[sys.argv.index("--template") + 1]
+    if template == "restaurant":
+        scenes = [
+            ("桌态正常", "明天晚上7点有四人桌吗？"),
+            ("菜价查询", "金汤酸菜鱼多少钱？"),
+            ("未知日期-回归", "后天中午有包房吗？"),   # 示例数据仅覆盖次日 → UNKNOWN_DATE 静默失败防线
+            ("订单查询", "帮我查订单 R20261001"),
+            ("会员脱敏", "会员 M-2001 有什么偏好？"),
+            ("客诉升级-回归", "我是3号桌的李先生，菜里有异物，立即帮我提交投诉升级店长处理"),
+        ]
+    else:
+        scenes = [
+            ("房态正常", "明天晚上还有标准间吗？"),
+            ("价格正常", "10月31号的豪华房多少钱？"),
+            ("未知日期-回归", "11月8号晚上有套房吗？"),   # 历史 eval_case：hotel_room_status empty_result
+            ("投诉升级-回归", "房间太吵了我要投诉，帮我升级人工"),
+            ("话术生成-回归", "帮王先生生成一条离店关怀话术"),
+            ("订单查询", "帮我查一下订单 B20261001"),
+            ("订单不存在-回归", "帮我查一下订单 B9999999"),  # 如实 NOT_FOUND 防线
+            ("多工具-组合", "今天有标准间吗？多少钱一晚？"),
+        ]
 
     # 2. 读取 eval_cases 回归集
     try:
@@ -76,7 +92,7 @@ def main():
 
     out = buf.getvalue()
     print(out)
-    fname = f"regression-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+    fname = f"regression-{template}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
     with open(os.path.join(r"D:\AI\edgehotel-agent\data", fname), "w", encoding="utf-8") as f:
         f.write("# EdgeHotel-Agent 回归报告\n\n" + out)
 
