@@ -1,4 +1,6 @@
 # --- EdgeHotel-Agent .gitignore（如启用 git 版本管理）---
+# 环境变量真实配置（凭据不入库——.env.example 仅占位示例）
+.env
 # 构建产物
 target/
 # 运行时数据（SQLite 库——见 backup-edgehotel-db.ps1 备份策略）
